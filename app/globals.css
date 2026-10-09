@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d4 transparent;
+}
+
+:is(.dark) * {
+  scrollbar-color: #525252 transparent;
+}
+
+/* Chromium / Safari */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #d4d4d4;
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #a3a3a3;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background-color: #525252;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: #737373;
+}
+
+/* Scrollbar disembunyikan tapi tetap bisa discroll — dipakai di area yang
+   scrollbar-nya bikin konten ter-mx-auto jadi geser (mis. thread chat). */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
