@@ -1,5 +1,5 @@
 // ponytail: seed dev minimal — 1 user + 1 workspace 1500 Token aktif 7 hari,
-// agar billing bisa didemokan tanpa klaim QR. Idempoten via email.
+// agar billing bisa didemokan tanpa klaim QR. Idempoten via email + SELECT fallback.
 import { readFileSync } from "node:fs";
 import postgres from "postgres";
 
@@ -30,35 +30,41 @@ if (!url) {
 const sql = postgres(url, { max: 1 });
 try {
   const users = await sql`
-    INSERT INTO users (email, password_hash)
-    VALUES ('dev@example.com', 'dev-only-not-a-real-hash')
-    ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+    INSERT INTO users (email, name, avatar_url)
+    VALUES ('dev@example.com', 'Dev User', NULL)
+    ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
     RETURNING id`;
   const userId = users[0].id;
+  // phone_number unique terpisah -> UPDATE terpisah supaya idempoten ganda-arah.
+  await sql`
+    UPDATE users SET phone_number = '081200000001'
+    WHERE id = ${userId} AND phone_number IS NULL`;
 
-  const ws = await sql`
-    INSERT INTO workspaces (owner_id, name, token_balance, active_until)
-    VALUES (${userId}, 'Dev Workspace', 1500, now() + interval '7 days')
-    ON CONFLICT DO NOTHING
-    RETURNING id, token_balance`;
-  // ponytail: tanpa unique constraint alami -> ambil workspace dev milik user bila sudah ada.
-  const row =
-    ws[0] ??
-    (
+  let row = (
+    await sql`
+      SELECT id, token_balance FROM workspaces
+      WHERE user_id = ${userId} ORDER BY created_at LIMIT 1`
+  )[0];
+  if (!row) {
+    row = (
       await sql`
-        SELECT id, token_balance FROM workspaces
-        WHERE owner_id = ${userId} AND name = 'Dev Workspace' LIMIT 1`
+        INSERT INTO workspaces (user_id, token_balance, expires_at)
+        VALUES (${userId}, 1500, now() + interval '7 days')
+        RETURNING id, token_balance`
     )[0];
+  }
 
   await sql`
-    INSERT INTO token_transactions (workspace_id, delta, reason)
-    SELECT ${row.id}, 1500, 'seed'
+    INSERT INTO token_transactions (workspace_id, type, amount, balance_after)
+    SELECT ${row.id}, 'grant', 1500, 1500
     WHERE NOT EXISTS (
-      SELECT 1 FROM token_transactions WHERE workspace_id = ${row.id} AND reason = 'seed'
+      SELECT 1 FROM token_transactions WHERE workspace_id = ${row.id} AND type = 'grant'
     )`;
 
-  const check = await sql`SELECT token_balance FROM workspaces WHERE id = ${row.id}`;
-  console.log(`seed OK: workspace dev ${row.id} = ${check[0].token_balance} Token`);
+  const check = await sql`SELECT token_balance, expires_at FROM workspaces WHERE id = ${row.id}`;
+  console.log(
+    `seed OK: workspace dev ${row.id} = ${check[0].token_balance} Token, aktif s/d ${check[0].expires_at}`
+  );
 } finally {
   await sql.end();
 }

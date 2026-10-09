@@ -45,6 +45,14 @@ try {
     await sql.unsafe(readFileSync(join(dir, f), "utf8"));
     console.log(`migrated: ${f}`);
   }
+  // ponytail: guard skema pre-PRD — IF NOT EXISTS tak bisa perbaiki tabel lama.
+  const legacy = await sql`
+    SELECT true FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'password_hash' LIMIT 1`;
+  if (legacy.length) {
+    console.error("Skema lama terdeteksi (users.password_hash). Jalankan: docker compose -f docker-compose.dev.yml down -v; lalu db:migrate + db:seed ulang.");
+    process.exit(1);
+  }
 } finally {
   await sql.end();
 }
