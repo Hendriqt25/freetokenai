@@ -42,6 +42,9 @@ export type BillingMeta = {
   modelId: string;
   endpointType: "chat" | "image" | "video";
   mediaUrl?: string | null;
+  // ponytail: callback id usage_log yang baru dibuat — /api/chat menautkan
+  // baris assistant chat_messages.usage_log_id (PRD §5.3). Opsional, aditif.
+  onUsageLogged?: (usageId: string) => void;
 };
 
 export async function balanceOf(workspaceId: string): Promise<number> {
@@ -79,6 +82,7 @@ async function logBurn(workspaceId: string, cost: number, meta: BillingMeta, led
     await tx`
       UPDATE token_transactions SET reference_type = 'usage_log', reference_id = ${usage[0].id}
       WHERE id = ${ledgerId}`;
+    meta.onUsageLogged?.(usage[0].id);
   });
 }
 

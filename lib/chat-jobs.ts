@@ -1,8 +1,8 @@
 // ponytail: request chat jalan di module-scope agar selamat dari pindah page.
 // Navigasi SPA tidak reload module — fetch ke /api/chat jalan terus walau
-// ChatPanel unmount; balasan tetap disimpan via appendChatMessage (PRD 5.3),
-// panel yang dibuka kembali memuatnya dari storage + subscription di bawah.
-import { appendChatMessage } from "./chat-history";
+// ChatPanel unmount. Giliran SUKSES disimpan server (chat_messages +
+// usage_log_id, PRD §5.3), jadi saat selesai cukup hydrateMessages (baca DB).
+import { appendChatMessage, hydrateMessages } from "./chat-history";
 
 export const CHAT_JOBS_CHANGED = "ftai:chat-jobs-changed";
 
@@ -46,12 +46,18 @@ export function startChatJob(args: {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: args.message, history: args.history, model: args.model }),
+        body: JSON.stringify({
+          message: args.message,
+          history: args.history,
+          model: args.model,
+          session_id: args.sessionId,
+        }),
         signal: controller.signal,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error?.message ?? "Gagal menghubungi AI");
-      appendChatMessage(args.sessionId, "assistant", String(data.reply ?? ""));
+      // server sudah menulis user+assistant ke chat_messages -> muat dari DB
+      await hydrateMessages(args.sessionId);
     } catch (e) {
       // ponytail: abort = user sengaja pause, bukan error — tanpa bubble merah.
       if (e instanceof DOMException && e.name === "AbortError") {

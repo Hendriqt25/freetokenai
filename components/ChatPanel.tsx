@@ -3,7 +3,7 @@
 import { Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { appendChatMessage, CHAT_CHANGED, CHAT_NEW, createChatSession, getChatMessages } from "@/lib/chat-history";
+import { appendChatMessage, CHAT_CHANGED, CHAT_NEW, createChatSession, getChatMessages, hydrateMessages } from "@/lib/chat-history";
 import { CHAT_JOBS_CHANGED, isChatRunning, startChatJob, stopChatJob, subscribeChatJobs } from "@/lib/chat-jobs";
 import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
 import { getAppSettings } from "@/lib/settings";
@@ -134,11 +134,12 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
     setIsSending(isChatRunning(id));
   }
 
-  // ponytail: buka sesi lama = muat chat_messages-nya (PRD 7.4).
+  // ponytail: buka sesi lama = muat chat_messages-nya dari DB (PRD 7.4).
   // Job latar yang selesai saat user di page lain ikut masuk via subscription.
   useEffect(() => {
     if (!sessionId) return;
     reloadMessages(sessionId);
+    void hydrateMessages(sessionId);
     const refresh = () => reloadMessages(sessionId);
     const unsub = subscribeChatJobs(refresh);
     window.addEventListener(CHAT_CHANGED, refresh);
@@ -178,7 +179,8 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
     let id = sessionId;
     let isNew = false;
     if (!id) {
-      id = createChatSession().id;
+      const created = await createChatSession();
+      id = created.id;
       isNew = true;
     }
     const target = id;

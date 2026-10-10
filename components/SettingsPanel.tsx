@@ -100,7 +100,7 @@ export default function SettingsPanel() {
 
   function wipeChats() {
     if (!window.confirm("Hapus semua riwayat obrolan?")) return;
-    listChatSessions().forEach((s) => deleteChatSession(s.id));
+    listChatSessions().forEach((s) => void deleteChatSession(s.id));
     flash("Semua riwayat obrolan dihapus.");
   }
 

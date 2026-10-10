@@ -17,7 +17,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CHAT_CHANGED, CHAT_NEW, deleteChatSession, listChatSessions, type ChatSession } from "@/lib/chat-history";
+import { CHAT_CHANGED, CHAT_NEW, deleteChatSession, hydrateSessions, listChatSessions, type ChatSession } from "@/lib/chat-history";
+import { CHAT_JOBS_CHANGED } from "@/lib/chat-jobs";
 import { fetchProfile, getProfile, SETTINGS_CHANGED, type UserProfile } from "@/lib/settings";
 
 const navItems = [
@@ -34,21 +35,25 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
   const router = useRouter();
   const pathname = usePathname();
 
-  // ponytail: "Terbaru" = chat_sessions per-user (PRD 4.5/5.3), refresh tiap ada perubahan.
+  // ponytail: "Terbaru" = chat_sessions per-user dari DB (PRD 4.5/5.3).
+  // sync() baca cache; hydrateSessions() tarik DB lalu notify -> sync jalan lagi.
   useEffect(() => {
-    const reload = () => {
+    const sync = () => {
       setSessions(listChatSessions());
       setProfile(getProfile());
     };
-    reload();
+    sync();
+    void hydrateSessions();
     fetchProfile().then(setProfile);
-    window.addEventListener(CHAT_CHANGED, reload);
-    window.addEventListener(SETTINGS_CHANGED, reload);
-    window.addEventListener("storage", reload);
+    window.addEventListener(CHAT_CHANGED, sync);
+    // job chat selesai -> judul/updated_at berubah di DB, muat ulang
+    window.addEventListener(CHAT_JOBS_CHANGED, () => void hydrateSessions());
+    window.addEventListener(SETTINGS_CHANGED, sync);
+    window.addEventListener("storage", sync);
     return () => {
-      window.removeEventListener(CHAT_CHANGED, reload);
-      window.removeEventListener(SETTINGS_CHANGED, reload);
-      window.removeEventListener("storage", reload);
+      window.removeEventListener(CHAT_CHANGED, sync);
+      window.removeEventListener(SETTINGS_CHANGED, sync);
+      window.removeEventListener("storage", sync);
     };
   }, []);
 
@@ -61,7 +66,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
   }
 
   function removeSession(id: string) {
-    deleteChatSession(id);
+    void deleteChatSession(id);
     if (pathname === `/dashboard/chat/${id}`) router.push("/dashboard");
   }
 

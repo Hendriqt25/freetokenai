@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { DEFAULT_CHAT_MODEL, isGroqModel, isKnownChatModel } from "@/lib/chat-models";
+import { sql } from "@/lib/db";
 import { fetchRetryOnce } from "@/lib/obs";
 import {
   chatCost,
@@ -97,8 +98,68 @@ async function callGemini(model: string, key: string, message: string, history: 
   return NextResponse.json({ reply });
 }
 
+// ponytail: persist 1 giliran chat (user + assistant) ke chat_sessions/
+// chat_messages (PRD §5.3); assistant ditautkan usage_log_id (dari withTokens).
+// Autocreate sesi + judul dari pesan pertama. Return id sesi.
+async function saveChatTurn(
+  wsId: string,
+  sessionId: string,
+  userText: string,
+  reply: string,
+  usageId: string | undefined,
+): Promise<string> {
+  const title = userText.slice(0, 60) || "Obrolan Baru";
+  return (await sql.begin(async (tx: any) => {
+    let sid = sessionId;
+    if (sid) {
+      const ok = (await tx`
+        SELECT 1 FROM chat_sessions WHERE id = ${sid} AND workspace_id = ${wsId} LIMIT 1`) as unknown as unknown[];
+      if (!ok[0]) sid = "";
+    }
+    if (!sid) {
+      const created = (await tx`
+        INSERT INTO chat_sessions (workspace_id, title) VALUES (${wsId}, ${title})
+        RETURNING id`) as unknown as { id: string }[];
+      sid = created[0].id;
+    }
+    await tx`INSERT INTO chat_messages (session_id, role, content) VALUES (${sid}, 'user', ${userText})`;
+    await tx`
+      INSERT INTO chat_messages (session_id, role, content, usage_log_id)
+      VALUES (${sid}, 'assistant', ${reply}, ${usageId ?? null})`;
+    await tx`
+      UPDATE chat_sessions SET updated_at = now(),
+        title = CASE WHEN title = 'Obrolan Baru' THEN ${title} ELSE title END
+      WHERE id = ${sid}`;
+    return sid;
+  })) as unknown as string;
+}
+
+// ponytail: simpan giliran setelah vendor sukses, lalu kembalikan respons asli
+// + session_id (dipakai klien untuk membuka /dashboard/chat/:id). Persist gagal
+// TIDAK boleh menggagalkan balasan user -> cukup console.error.
+async function persistAndRespond(
+  res: NextResponse,
+  ctx: { wsId: string; sessionId: string; message: string; usageId?: string },
+) {
+  let data: { reply?: string };
+  try {
+    data = await res.clone().json();
+  } catch {
+    return res;
+  }
+  const reply = String(data?.reply ?? "");
+  if (!reply) return res;
+  try {
+    const sid = await saveChatTurn(ctx.wsId, ctx.sessionId, ctx.message, reply, ctx.usageId);
+    return NextResponse.json({ ...data, session_id: sid });
+  } catch (e) {
+    console.error("chat persist failed", e);
+    return res;
+  }
+}
+
 export async function POST(req: Request) {
-  let body: { message?: unknown; history?: HistItem[]; model?: unknown };
+  let body: { message?: unknown; history?: HistItem[]; model?: unknown; session_id?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -120,6 +181,7 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   const history = Array.isArray(body.history) ? body.history : [];
+  const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 64) : "";
   // ponytail: billing Token atomik (PRD §4.3/§5.2) — 402 bila kurang,
   // refund otomatis bila provider gagal (!ok non-402)/throw. Production anon = 401 tanpa panggil provider.
   const wsId = await workspaceIdForRequest(req);
@@ -131,11 +193,18 @@ export async function POST(req: Request) {
       );
     return runProvider(model, message, history);
   }
+  let usageId: string | undefined;
   try {
-    return await withTokens(wsId, chatCost(model), () => runProvider(model, message, history), {
+    const res = await withTokens(wsId, chatCost(model), () => runProvider(model, message, history), {
       modelId: model,
       endpointType: "chat",
+      onUsageLogged: (id) => {
+        usageId = id;
+      },
     });
+    // ponytail: hanya persist saat sukses (error sudah di-refund, tak ada usage_log).
+    if (res.ok) return persistAndRespond(res, { wsId, sessionId, message, usageId });
+    return res;
   } catch (e) {
     if (e instanceof InsufficientTokensError) return insufficient(e.balance);
     throw e;
