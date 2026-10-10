@@ -66,6 +66,78 @@ export function saveAppSettings(s: AppSettings) {
 
 export type Device = { id: string; label: string; lastActive: string; current: boolean };
 
+export type WorkspaceInfo = { tokenBalance: number; expiresAt: string; expiresAtLabel: string };
+
+// ponytail: lapisan API nyata (PRD §7.4); fallback localStorage hanya bila API 5xx/jaringan mati.
+async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
+  try {
+    const res = await fetch(url, { credentials: "same-origin", ...init });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchWorkspace(): Promise<WorkspaceInfo> {
+  const data = await api<{ workspace: { token_balance: number; expires_at: string } }>(
+    "/api/v1/workspace",
+  );
+  if (!data) return { tokenBalance: 1500, expiresAt: "", expiresAtLabel: "27 September" };
+  const d = new Date(data.workspace.expires_at);
+  return {
+    tokenBalance: data.workspace.token_balance,
+    expiresAt: data.workspace.expires_at,
+    expiresAtLabel: Number.isNaN(d.getTime())
+      ? ""
+      : d.toLocaleDateString("id-ID", { day: "numeric", month: "long" }),
+  };
+}
+
+export async function fetchProfile(): Promise<UserProfile> {
+  const data = await api<{ profile: UserProfile }>("/api/v1/users/profile");
+  if (!data) return getProfile();
+  write(profileKey(), data.profile);
+  return data.profile;
+}
+
+export async function saveProfileRemote(p: UserProfile): Promise<UserProfile> {
+  const data = await api<{ profile: UserProfile }>("/api/v1/users/profile", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: p.name, contact: p.contact }),
+  });
+  const next = data?.profile ?? p;
+  saveProfile(next);
+  return next;
+}
+
+type RemoteSession = { id: string; device_fingerprint: string; last_active: string; current: boolean };
+
+export async function fetchDevices(): Promise<Device[]> {
+  const data = await api<{ sessions: RemoteSession[] }>("/api/v1/sessions");
+  if (!data) return listDevices();
+  const mapped: Device[] = data.sessions.map((s) => ({
+    id: s.id,
+    label: s.current ? "Perangkat ini" : s.device_fingerprint,
+    lastActive: s.last_active,
+    current: s.current,
+  }));
+  write(devicesKey(), mapped);
+  return mapped;
+}
+
+export async function revokeDeviceRemote(id: string): Promise<Device[]> {
+  const data = await api<{ ok: boolean }>(`/api/v1/sessions?id=${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!data) {
+    revokeDevice(id);
+    return listDevices();
+  }
+  return fetchDevices();
+}
+
 export function listDevices(): Device[] {
   if (typeof window === "undefined") return [];
   const cached = read<Device[]>(devicesKey(), []);

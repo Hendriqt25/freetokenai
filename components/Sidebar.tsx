@@ -18,7 +18,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CHAT_CHANGED, CHAT_NEW, deleteChatSession, listChatSessions, type ChatSession } from "@/lib/chat-history";
-import { getProfile, SETTINGS_CHANGED, type UserProfile } from "@/lib/settings";
+import { fetchProfile, getProfile, SETTINGS_CHANGED, type UserProfile } from "@/lib/settings";
 
 const navItems = [
   { label: "Bikin Gambar", icon: ImageIcon, href: "/dashboard/image" },
@@ -41,6 +41,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
       setProfile(getProfile());
     };
     reload();
+    fetchProfile().then(setProfile);
     window.addEventListener(CHAT_CHANGED, reload);
     window.addEventListener(SETTINGS_CHANGED, reload);
     window.addEventListener("storage", reload);

@@ -1,8 +1,16 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Menu, Ticket } from "lucide-react";
-import { mockWorkspace } from "@/lib/mock-data";
+import { fetchWorkspace } from "@/lib/settings";
 import ThemeToggle from "./ThemeToggle";
 
 export default function TopBar({ onMenu }: { onMenu?: () => void }) {
+  // ponytail: sisa Token dari DB; fallback lokal bila API 5xx (di dalam fetchWorkspace).
+  const [balance, setBalance] = useState(1500);
+  useEffect(() => {
+    fetchWorkspace().then((w) => setBalance(w.tokenBalance));
+  }, []);
   return (
     <header className="flex items-center justify-between border-b border-neutral-200 px-4 py-3.5 md:px-8 dark:border-neutral-800">
       <div className="flex items-center gap-2.5">
@@ -19,7 +27,7 @@ export default function TopBar({ onMenu }: { onMenu?: () => void }) {
         </span>
         <span className="flex items-center gap-1.5 rounded-full border border-neutral-200 px-2.5 py-0.5 text-xs font-medium text-primary dark:border-neutral-700">
           <Ticket size={13} />
-          {mockWorkspace.tokenBalance.toLocaleString("id-ID")}
+          {balance.toLocaleString("id-ID")}
         </span>
       </div>
       <ThemeToggle />

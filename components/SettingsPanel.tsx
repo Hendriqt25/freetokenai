@@ -9,15 +9,18 @@ import {
 } from "@/lib/chat-history";
 import { currentUserId } from "@/lib/current-user";
 import { loadMediaHistory } from "@/lib/media-history";
-import { mockWorkspace } from "@/lib/mock-data";
 import {
+  fetchDevices,
+  fetchProfile,
+  fetchWorkspace,
   getAppSettings,
   getProfile,
   listDevices,
-  revokeDevice,
+  revokeDeviceRemote,
   saveAppSettings,
-  saveProfile,
+  saveProfileRemote,
   type Device,
+  type WorkspaceInfo,
 } from "@/lib/settings";
 
 function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
@@ -47,11 +50,16 @@ export default function SettingsPanel() {
   const [lang, setLang] = useState<"id" | "en">("id");
   const [isDark, setIsDark] = useState(false);
   const [saved, setSaved] = useState("");
+  const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
 
   useEffect(() => {
     setName(getProfile().name);
     setContact(getProfile().contact);
     setDevices(listDevices());
+    // ponytail: tampilkan data DB; fallback lokal bila API 5xx (di dalam fetch*).
+    fetchProfile().then((p) => { setName(p.name); setContact(p.contact); });
+    fetchDevices().then(setDevices);
+    fetchWorkspace().then(setWorkspace);
     const app = getAppSettings();
     setModel(app.defaultModel);
     setLang(app.language);
@@ -161,8 +169,10 @@ export default function SettingsPanel() {
             <button
               type="button"
               className={btnPrimary}
-              onClick={() => {
-                saveProfile({ name: name.trim() || "Tanpa Nama", contact: contact.trim(), avatarUrl: null });
+              onClick={async () => {
+                const next = await saveProfileRemote({ name: name.trim() || "Tanpa Nama", contact: contact.trim(), avatarUrl: null });
+                setName(next.name);
+                setContact(next.contact);
                 flash("Profil disimpan.");
               }}
             >
@@ -188,7 +198,7 @@ export default function SettingsPanel() {
                   </span>
                 </span>
                 {!d.current && (
-                  <button type="button" className={btnDanger} onClick={() => setDevices(() => { revokeDevice(d.id); return listDevices(); })}>
+                  <button type="button" className={btnDanger} onClick={async () => setDevices(await revokeDeviceRemote(d.id))}>
                     Cabut
                   </button>
                 )}
@@ -201,10 +211,10 @@ export default function SettingsPanel() {
       <Section title="Workspace" desc="Sisa Token & masa aktif — read-only (GET /api/v1/workspace, PRD 7.4).">
         <div className="flex flex-wrap gap-2 text-sm">
           <span className="rounded-full border border-neutral-200 px-3 py-1 font-medium text-primary dark:border-neutral-700">
-            {mockWorkspace.tokenBalance.toLocaleString("id-ID")} Token
+            {(workspace?.tokenBalance ?? 1500).toLocaleString("id-ID")} Token
           </span>
           <span className="rounded-full border border-neutral-200 px-3 py-1 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-            Aktif Sampai {mockWorkspace.expiresAtLabel}
+            Aktif Sampai {workspace?.expiresAtLabel ?? "…"}
           </span>
         </div>
       </Section>
