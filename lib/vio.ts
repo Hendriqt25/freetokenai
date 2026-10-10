@@ -1,4 +1,6 @@
 // ponytail: satu helper server-only untuk Vio. Key TIDAK PERNAH ke client.
+import { fetchRetryOnce } from "./obs";
+
 export const VIO_BASE = "https://api.viostudio.id/v1";
 
 export function vioHeaders() {
@@ -11,7 +13,8 @@ export function vioHeaders() {
 }
 
 export async function vioFetch(path: string, init?: RequestInit) {
-  const res = await fetch(`${VIO_BASE}${path}`, {
+  // ponytail: NFR#6 — retry 1x hanya transient (5xx/throw); 4xx langsung pulang.
+  const res = await fetchRetryOnce(`${VIO_BASE}${path}`, {
     ...init,
     headers: { ...vioHeaders(), ...(init?.headers ?? {}) },
     cache: "no-store",

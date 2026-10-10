@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { chatCost, InsufficientTokensError, insufficient, validateApiKey, withTokens } from "@/lib/billing";
+import { fetchRetryOnce } from "@/lib/obs";
 import { rateLimited } from "@/lib/rate-limit";
 
 // ponytail: gateway publik (PRD 7.3: POST /v1/chat/completions, key rst_live_*).
@@ -92,7 +93,8 @@ export async function POST(req: Request) {
       valid.workspace_id,
       cost,
       async () => {
-        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        // ponytail: NFR#6 — retry 1x transient; gagal akhir -> refund di withTokens.
+        const res = await fetchRetryOnce("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
           body: JSON.stringify({

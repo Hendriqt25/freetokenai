@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { DEFAULT_CHAT_MODEL, isGroqModel, isKnownChatModel } from "@/lib/chat-models";
+import { fetchRetryOnce } from "@/lib/obs";
 import {
   chatCost,
   InsufficientTokensError,
@@ -24,7 +25,8 @@ async function callGroq(model: string, message: string, history: HistItem[]) {
       { error: { code: "NO_API_KEY", message: "GROQ_API_KEY belum diset di .env.local" } },
       { status: 500 },
     );
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  // ponytail: NFR#6 — fetchRetryOnce = retry 1x transient (5xx/throw) per provider.
+  const res = await fetchRetryOnce("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
@@ -65,7 +67,7 @@ async function callGemini(model: string, key: string, message: string, history: 
     })),
     { role: "user", parts: [{ text: message }] },
   ];
-  const res = await fetch(
+  const res = await fetchRetryOnce(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
