@@ -119,9 +119,16 @@ export async function POST(req: Request) {
     );
   const history = Array.isArray(body.history) ? body.history : [];
   // ponytail: billing Token atomik (PRD §4.3/§5.2) — 402 bila kurang,
-  // refund otomatis bila provider gagal (!ok non-402)/throw. Tanpa workspace = dev-mode tanpa tagihan.
+  // refund otomatis bila provider gagal (!ok non-402)/throw. Production anon = 401 tanpa panggil provider.
   const wsId = await workspaceIdForRequest(req);
-  if (!wsId) return runProvider(model, message, history);
+  if (!wsId) {
+    if (process.env.NODE_ENV === "production")
+      return NextResponse.json(
+        { error: { code: "UNAUTHORIZED", message: "Belum login." } },
+        { status: 401 },
+      );
+    return runProvider(model, message, history);
+  }
   try {
     return await withTokens(wsId, chatCost(model), () => runProvider(model, message, history), {
       modelId: model,

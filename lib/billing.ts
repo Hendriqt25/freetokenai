@@ -127,7 +127,8 @@ export async function workspaceIdForRequest(req: Request): Promise<string | null
       ORDER BY created_at LIMIT 1`) as unknown as { id: string }[];
     if (rows[0]) return rows[0].id;
   }
-  // ponytail: seed fallback hanya non-production; di production anon = null (401 di caller).
+  // ponytail: seed fallback hanya non-production; production anon = null dan
+  // caller WAJIB 401 tanpa panggil provider (/api/chat, /api/images/generate, /api/videos/generate).
   if (process.env.NODE_ENV === "production") return null;
   const seedUser = await devSeedUserId();
   if (!seedUser) return null;
