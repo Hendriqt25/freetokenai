@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { sql } from "./db";
+import { logReq, newRequestId } from "./obs";
 import { devSeedUserId, requireAuth } from "./auth";
 
 // ponytail: ledger dua arah (PRD §5.2) — burn saat deduct, refund saat refund,
@@ -112,20 +113,28 @@ export async function withTokens<T extends NextResponse>(
 ): Promise<T> {
   const deducted = await deduct(workspaceId, cost);
   if (!deducted) throw new InsufficientTokensError(await balanceOf(workspaceId));
+  // ponytail: NFR#5 — satu log per billed call (choke point semua AI routes).
+  const reqId = newRequestId();
+  const t0 = Date.now();
+  const done = (status: number, ok: boolean, note?: string) =>
+    logReq({ reqId, workspaceId, endpoint: meta.endpointType, latencyMs: Date.now() - t0, status, ok, note });
   let res: T;
   try {
     res = await fn();
   } catch (e) {
     await refund(workspaceId, cost, meta, deducted.ledgerId);
+    done(500, false, "throw->refund");
     throw e;
   }
   // ponytail: refund semua vendor gagal (!ok) kecuali 402 — 402 tak pernah
   // deduct (throw sebelum UPDATE), jadi refund di sini = ganda/salah.
   if (!res.ok && res.status !== 402) {
     await refund(workspaceId, cost, meta, deducted.ledgerId);
+    done(res.status, false, "fail->refund");
     return res;
   }
   await logBurn(workspaceId, cost, meta, deducted.ledgerId);
+  done(res.status, true);
   return res;
 }
 
