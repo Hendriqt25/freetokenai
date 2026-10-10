@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { chatCost, InsufficientTokensError, insufficient, validateApiKey, withTokens } from "@/lib/billing";
+import { rateLimited } from "@/lib/rate-limit";
 
-// ponytail: gateway publik dev-mode (PRD 7.3: POST /v1/chat/completions, key rst_live_*).
-// Validasi penuh (hash SHA-256, cek saldo, deduct Token) butuh DB — saat itu tiba,
-// tambah di sini tanpa ubah kontrak. Bentuk request/response ikut OpenAI agar
-// AI agent (LangChain, Vercel AI SDK, curl) langsung bisa pakai.
+// ponytail: gateway publik (PRD 7.3: POST /v1/chat/completions, key rst_live_*).
+// Format-valid -> rate-limit Redis 60/mnt -> hash SHA-256 ke api_keys DB ->
+// deduct atomik (402 bila kurang) -> Groq -> refund bila vendor gagal.
+// Bentuk request/response ikut OpenAI agar AI agent langsung bisa pakai.
 
 // ponytail: PRD 6 — model katalog dipetakan ke provider gratis yang sudah terbukti hidup.
 const MODEL_MAP: Record<string, string> = {
@@ -12,21 +14,6 @@ const MODEL_MAP: Record<string, string> = {
   "openai/gpt-oss-20b": "openai/gpt-oss-20b",
   "openai/gpt-oss-120b": "openai/gpt-oss-120b",
 };
-
-// ponytail: fixed-window counter in-memory (PRD 5.2: 60 req/menit/key).
-// Single-instance dev saja; produksi pakai Redis INCR+EXPIRE.
-const hits = new Map<string, { count: number; window: number }>();
-function rateLimited(key: string): boolean {
-  const now = Date.now();
-  const win = Math.floor(now / 60000);
-  const h = hits.get(key);
-  if (!h || h.window !== win) {
-    hits.set(key, { count: 1, window: win });
-    return false;
-  }
-  h.count += 1;
-  return h.count > 60;
-}
 
 type Msg = { role?: unknown; content?: unknown };
 
@@ -45,10 +32,16 @@ export async function POST(req: Request) {
       { status: 401 },
     );
   const apiKey = m[1];
-  if (rateLimited(apiKey))
+  if (await rateLimited(`gw:${apiKey}`))
     return NextResponse.json(
       { error: { code: "RATE_LIMITED", message: "Maks 60 request/menit per API Key." } },
       { status: 429 },
+    );
+  const valid = await validateApiKey(apiKey);
+  if (!valid)
+    return NextResponse.json(
+      { error: { code: "UNAUTHORIZED", message: "API key tidak dikenal / nonaktif." } },
+      { status: 401 },
     );
 
   let body: { model?: unknown; messages?: Msg[] };
@@ -68,7 +61,8 @@ export async function POST(req: Request) {
       { error: { code: "INVALID_PROMPT", message: "messages harus berisi pesan user." } },
       { status: 400 },
     );
-  const groqModel = MODEL_MAP[String(body.model ?? "resto-chat-fast")] ?? null;
+  const modelId = String(body.model ?? "resto-chat-fast");
+  const groqModel = MODEL_MAP[modelId] ?? null;
   if (!groqModel)
     return NextResponse.json(
       {
@@ -90,31 +84,44 @@ export async function POST(req: Request) {
     role: x.role === "assistant" ? "assistant" : "user",
     content: String(x.content ?? "").slice(0, 8000),
   }));
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: groqModel,
-      messages: [
-        { role: "system", content: "Jawab dalam Bahasa Indonesia yang ringkas dan membantu." },
-        ...history,
-        { role: "user", content: message },
-      ],
-    }),
-    cache: "no-store",
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok)
-    return NextResponse.json(
-      { error: { code: "PROVIDER_ERROR", message: data?.error?.message ?? "Groq error" } },
-      { status: 502 },
+  const cost = chatCost(modelId);
+  try {
+    return await withTokens(
+      valid.workspace_id,
+      cost,
+      async () => {
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            model: groqModel,
+            messages: [
+              { role: "system", content: "Jawab dalam Bahasa Indonesia yang ringkas dan membantu." },
+              ...history,
+              { role: "user", content: message },
+            ],
+          }),
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok)
+          return NextResponse.json(
+            { error: { code: "PROVIDER_ERROR", message: data?.error?.message ?? "Groq error" } },
+            { status: 502 },
+          );
+        const reply = String(data?.choices?.[0]?.message?.content ?? "").trim();
+        // ponytail: bentuk OpenAI — agent tak perlu adaptor khusus.
+        return NextResponse.json({
+          id: `chatcmpl-dev-${Date.now()}`,
+          object: "chat.completion",
+          model: modelId,
+          choices: [{ index: 0, message: { role: "assistant", content: reply }, finish_reason: "stop" }],
+        });
+      },
+      { apiKeyId: valid.id, modelId, endpointType: "chat" },
     );
-  const reply = String(data?.choices?.[0]?.message?.content ?? "").trim();
-  // ponytail: bentuk OpenAI — agent tak perlu adaptor khusus.
-  return NextResponse.json({
-    id: `chatcmpl-dev-${Date.now()}`,
-    object: "chat.completion",
-    model: String(body.model ?? "resto-chat-fast"),
-    choices: [{ index: 0, message: { role: "assistant", content: reply }, finish_reason: "stop" }],
-  });
+  } catch (e) {
+    if (e instanceof InsufficientTokensError) return insufficient(e.balance);
+    throw e;
+  }
 }

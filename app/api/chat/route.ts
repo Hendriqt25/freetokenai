@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { DEFAULT_CHAT_MODEL, isGroqModel, isKnownChatModel } from "@/lib/chat-models";
+import {
+  chatCost,
+  InsufficientTokensError,
+  insufficient,
+  withTokens,
+  workspaceIdForRequest,
+} from "@/lib/billing";
 
 // ponytail: proxy server-only. Key TIDAK PERNAH ke client.
 const GEMINI_DEFAULT = process.env.GEMINI_MODEL ?? DEFAULT_CHAT_MODEL;
@@ -111,21 +118,40 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   const history = Array.isArray(body.history) ? body.history : [];
+  // ponytail: billing Token atomik (PRD §4.3/§5.2) — 402 bila kurang,
+  // refund otomatis bila provider 5xx/throw. Tanpa workspace = dev-mode tanpa tagihan.
+  const wsId = await workspaceIdForRequest(req);
+  if (!wsId) return runProvider(model, message, history);
+  try {
+    return await withTokens(wsId, chatCost(model), () => runProvider(model, message, history), {
+      modelId: model,
+      endpointType: "chat",
+    });
+  } catch (e) {
+    if (e instanceof InsufficientTokensError) return insufficient(e.balance);
+    throw e;
+  }
+}
+
+function runProvider(model: string, message: string, history: HistItem[]) {
   if (isGroqModel(model)) return callGroq(model, message, history);
   const key = process.env.GEMINI_API_KEY;
   if (!key)
-    return NextResponse.json(
-      { error: { code: "NO_API_KEY", message: "GEMINI_API_KEY belum diset di .env.local" } },
-      { status: 500 },
+    return Promise.resolve(
+      NextResponse.json(
+        { error: { code: "NO_API_KEY", message: "GEMINI_API_KEY belum diset di .env.local" } },
+        { status: 500 },
+      ),
     );
   // ponytail: Gemini sering 503 high-demand -> fallback ke Groq 20b bila ada key,
   // supaya obrolan tetap dibalas selama salah satu provider hidup.
-  try {
-    const res = await callGemini(model, key, message, history);
-    if (res.status !== 502 || !process.env.GROQ_API_KEY) return res;
-    return callGroq("openai/gpt-oss-20b", message, history);
-  } catch {
-    if (process.env.GROQ_API_KEY) return callGroq("openai/gpt-oss-20b", message, history);
-    throw new Error("Gagal menghubungi provider AI");
-  }
+  return callGemini(model, key, message, history)
+    .then(async (res) => {
+      if (res.status !== 502 || !process.env.GROQ_API_KEY) return res;
+      return callGroq("openai/gpt-oss-20b", message, history);
+    })
+    .catch(() => {
+      if (process.env.GROQ_API_KEY) return callGroq("openai/gpt-oss-20b", message, history);
+      throw new Error("Gagal menghubungi provider AI");
+    });
 }
