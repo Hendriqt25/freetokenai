@@ -46,7 +46,7 @@ export async function PATCH(req: Request) {
   try {
     if (name !== null) await sql`UPDATE users SET name = ${name} WHERE id = ${auth.user.id}`;
     if (email !== null)
-      await sql`UPDATE users SET email = ${email} WHERE id = ${auth.user.id}`;
+      await sql`UPDATE users SET email = ${email}, phone_number = NULL WHERE id = ${auth.user.id}`;
     else if (phone !== null)
       await sql`UPDATE users SET phone_number = ${phone} WHERE id = ${auth.user.id}`;
     const rows = (await sql`
