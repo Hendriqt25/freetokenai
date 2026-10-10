@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   });
 }
 
-// ponytail: login device baru = tambah sesi; ke-3 ditolak 403 (PRD §2).
+// ponytail: login device baru = tambah sesi; ke-3 auto-revoke oldest (PRD §2).
 export async function POST(req: Request) {
   const auth = await requireAuth(req);
   if (!auth)
@@ -39,11 +39,6 @@ export async function POST(req: Request) {
     // tanpa body = pakai user-agent
   }
   const created = await createSession(auth.user.id, fingerprint.slice(0, 255));
-  if ("error" in created)
-    return NextResponse.json(
-      { error: { code: "DEVICE_LIMIT", message: "Maks 2 device aktif. Cabut salah satu dulu." } },
-      { status: 403 },
-    );
   return NextResponse.json({ session: { id: created.id } }, { status: 201 });
 }
 

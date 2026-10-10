@@ -6,6 +6,12 @@ export async function GET(req: Request) {
   const auth = await requireAuth(req);
   if (auth) return NextResponse.json({ user: auth.user });
 
+  // ponytail: dev auto-login hanya non-production; di production anon = 401.
+  if (process.env.NODE_ENV === "production")
+    return NextResponse.json(
+      { error: { code: "UNAUTHORIZED", message: "Belum login." } },
+      { status: 401 },
+    );
   const userId = await devSeedUserId();
   if (!userId)
     return NextResponse.json(
@@ -14,11 +20,6 @@ export async function GET(req: Request) {
     );
   const ua = (req.headers.get("user-agent") ?? "dev-auto").slice(0, 255);
   const created = await createSession(userId, ua);
-  if ("error" in created)
-    return NextResponse.json(
-      { error: { code: "DEVICE_LIMIT", message: "Maks 2 device aktif. Cabut salah satu dulu." } },
-      { status: 403 },
-    );
   const authed = await requireAuth(
     new Request(req.url, { headers: { cookie: `ftai_session=${created.id}` } }),
   );
