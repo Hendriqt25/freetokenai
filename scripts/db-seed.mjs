@@ -1,8 +1,20 @@
 // ponytail: seed dev multi-tenant — 2 cafe (dengan saldo prepaid + ledger topup),
 // 1 super admin, 1 kasir per cafe, 2 paket token default, + customer dev (dev@example.com)
 // agar auto-login TASK-001 dan billing tetap jalan. Idempoten: upsert by slug/email, ledger sekali.
+// Admin (TASK-023): admin_password_hash di-set via scrypt dengan PEPPER SAMA yang dipakai
+// runtime (ADMIN_PASSWORD_PEPPER default dev). Password akun admin dev:
+//   admin@example.com / Admin123! , kasir.kopi@example.com / Kasir123! , kasir.lestari@example.com / Kasir123!
 import { readFileSync } from "node:fs";
+import { randomBytes, scryptSync } from "node:crypto";
 import postgres from "postgres";
+
+// ponytail: SALINAN hardening admin-auth (lib) — seed CLI berdiri sendiri, tak bisa import TS.
+const PEPPER = process.env.ADMIN_PASSWORD_PEPPER ?? "dev-only-pepper-TASK023";
+function adminHash(password) {
+  const salt = randomBytes(16);
+  const key = scryptSync(password + PEPPER, salt, 64, { N: 16384, r: 8, p: 1 });
+  return `scrypt$1$${salt.toString("hex")}$${key.toString("hex")}`;
+}
 
 function loadEnv() {
   for (const f of [".env", ".env.local"]) {
@@ -65,9 +77,18 @@ try {
   for (const c of cafeRows) cafes[c.slug] = c.id;
 
   // Super admin + 1 kasir per cafe (staff tidak butuh workspace — ia kelola cafe).
-  await upsertUser({ email: "admin@example.com", phone: "081200000000", name: "Super Admin", role: "super_admin", cafeId: null });
-  await upsertUser({ email: "kasir.kopi@example.com", phone: "081200000002", name: "Kasir Kopi Senja", role: "kasir", cafeId: cafes["kopi-senja"] });
-  await upsertUser({ email: "kasir.lestari@example.com", phone: "081200000003", name: "Kasir Warung Lestari", role: "kasir", cafeId: cafes["warung-lestari"] });
+  // admin_password_hash idempoten: hanya di-set bila kosong supaya seed ulang tak menimpa ganti password.
+  const admins = [
+    { email: "admin@example.com", phone: "081200000000", name: "Super Admin", role: "super_admin", cafeId: null, pass: "Admin123!" },
+    { email: "kasir.kopi@example.com", phone: "081200000002", name: "Kasir Kopi Senja", role: "kasir", cafeId: cafes["kopi-senja"], pass: "Kasir123!" },
+    { email: "kasir.lestari@example.com", phone: "081200000003", name: "Kasir Warung Lestari", role: "kasir", cafeId: cafes["warung-lestari"], pass: "Kasir123!" },
+  ];
+  for (const a of admins) {
+    const id = await upsertUser(a);
+    await sql`
+      UPDATE users SET admin_password_hash = ${adminHash(a.pass)}
+      WHERE id = ${id} AND admin_password_hash IS NULL`;
+  }
 
   // Paket token default (global, cafe_id NULL) — pilihan nominal kasir saat generate struk.
   await sql`
