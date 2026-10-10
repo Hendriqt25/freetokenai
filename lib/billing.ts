@@ -74,7 +74,8 @@ async function refund(workspaceId: string, cost: number, meta: BillingMeta) {
 }
 
 // ponytail: deduct atomik -> vendor fn() -> sukses catat burn; throw /
-// respons 5xx vendor catat refund. Jangan tahan transaksi DB selama vendor call.
+// respons !ok (!=402) vendor catat refund. Jangan tahan transaksi DB selama vendor call.
+// PRD §5.2: deduct + usage-extend satu statement (expired -> +7d, aktif -> tetap).
 export async function withTokens<T extends NextResponse>(
   workspaceId: string,
   cost: number,
@@ -82,7 +83,8 @@ export async function withTokens<T extends NextResponse>(
   meta: BillingMeta,
 ): Promise<T> {
   const deducted = (await sql`
-    UPDATE workspaces SET token_balance = token_balance - ${cost}
+    UPDATE workspaces SET token_balance = token_balance - ${cost},
+      expires_at = CASE WHEN expires_at < now() THEN now() + interval '7 days' ELSE expires_at END
     WHERE id = ${workspaceId} AND token_balance >= ${cost}
     RETURNING token_balance`) as unknown as { token_balance: number }[];
   if (!deducted[0]) throw new InsufficientTokensError(await balanceOf(workspaceId));
@@ -93,7 +95,9 @@ export async function withTokens<T extends NextResponse>(
     await refund(workspaceId, cost, meta);
     throw e;
   }
-  if (res.status >= 500) {
+  // ponytail: refund semua vendor gagal (!ok) kecuali 402 — 402 tak pernah
+  // deduct (throw sebelum UPDATE), jadi refund di sini = ganda/salah.
+  if (!res.ok && res.status !== 402) {
     await refund(workspaceId, cost, meta);
     return res;
   }

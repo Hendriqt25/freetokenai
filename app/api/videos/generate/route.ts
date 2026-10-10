@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       });
       return NextResponse.json(data, { status });
     };
-    // ponytail: billing Token atomik (PRD §4.3/§6) — 5xx vendor = refund otomatis.
+    // ponytail: billing Token atomik (PRD §4.3/§6) — vendor gagal (!ok, non-402) = refund otomatis.
     const wsId = await workspaceIdForRequest(req);
     if (!wsId) return run();
     try {

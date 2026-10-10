@@ -3,8 +3,9 @@ import { chatCost, InsufficientTokensError, insufficient, validateApiKey, withTo
 import { rateLimited } from "@/lib/rate-limit";
 
 // ponytail: gateway publik (PRD 7.3: POST /v1/chat/completions, key rst_live_*).
-// Format-valid -> rate-limit Redis 60/mnt -> hash SHA-256 ke api_keys DB ->
-// deduct atomik (402 bila kurang) -> Groq -> refund bila vendor gagal.
+// Format-valid -> hash SHA-256 ke api_keys DB -> rate-limit Redis 60/mnt by
+// api_key_id (PRD §5.2 `rl:{api_key_id}:{minute}`, raw secret tak pernah ke Redis) ->
+// deduct atomik + usage-extend (402 bila kurang) -> Groq -> refund bila vendor gagal.
 // Bentuk request/response ikut OpenAI agar AI agent langsung bisa pakai.
 
 // ponytail: PRD 6 — model katalog dipetakan ke provider gratis yang sudah terbukti hidup.
@@ -32,16 +33,17 @@ export async function POST(req: Request) {
       { status: 401 },
     );
   const apiKey = m[1];
-  if (await rateLimited(`gw:${apiKey}`))
-    return NextResponse.json(
-      { error: { code: "RATE_LIMITED", message: "Maks 60 request/menit per API Key." } },
-      { status: 429 },
-    );
   const valid = await validateApiKey(apiKey);
   if (!valid)
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "API key tidak dikenal / nonaktif." } },
       { status: 401 },
+    );
+  // ponytail: rate-limit SETELAH lookup, kunci = api_key_id (uuid aman log).
+  if (await rateLimited(`gw:${valid.id}`))
+    return NextResponse.json(
+      { error: { code: "RATE_LIMITED", message: "Maks 60 request/menit per API Key." } },
+      { status: 429 },
     );
 
   let body: { model?: unknown; messages?: Msg[] };

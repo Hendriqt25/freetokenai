@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     );
   const history = Array.isArray(body.history) ? body.history : [];
   // ponytail: billing Token atomik (PRD §4.3/§5.2) — 402 bila kurang,
-  // refund otomatis bila provider 5xx/throw. Tanpa workspace = dev-mode tanpa tagihan.
+  // refund otomatis bila provider gagal (!ok non-402)/throw. Tanpa workspace = dev-mode tanpa tagihan.
   const wsId = await workspaceIdForRequest(req);
   if (!wsId) return runProvider(model, message, history);
   try {
