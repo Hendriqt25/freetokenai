@@ -50,17 +50,23 @@ export async function countSessions(userId: string): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
-// ponytail: tolak device ke-3 di satu tempat — semua pembuat sesi lewat sini.
-export async function createSession(
-  userId: string,
-  fingerprint: string,
-): Promise<{ id: string } | { error: "DEVICE_LIMIT" }> {
-  if ((await countSessions(userId)) >= MAX_DEVICES) return { error: "DEVICE_LIMIT" };
+// ponytail: device ke-3 = revoke oldest dalam 1 transaksi (PRD §2/§4.2/§5.3).
+// SELECT ... FOR UPDATE + DELETE + INSERT atomik — tanpa TOCTOU, tanpa 403.
+export async function createSession(userId: string, fingerprint: string): Promise<{ id: string }> {
   const hash = randomBytes(32).toString("hex");
-  const rows = (await sql`
-    INSERT INTO sessions (user_id, device_fingerprint, refresh_token_hash)
-    VALUES (${userId}, ${fingerprint.slice(0, 255) || "unknown"}, ${hash})
-    RETURNING id`) as unknown as { id: string }[];
+  const fp = fingerprint.slice(0, 255) || "unknown";
+  const rows = (await sql.begin(async (tx: any) => {
+    const existing = (await tx`
+      SELECT id FROM sessions WHERE user_id = ${userId}
+      ORDER BY last_active ASC FOR UPDATE`) as unknown as { id: string }[];
+    if (existing.length >= MAX_DEVICES && existing[0]) {
+      await tx`DELETE FROM sessions WHERE id = ${existing[0].id}`;
+    }
+    return (await tx`
+      INSERT INTO sessions (user_id, device_fingerprint, refresh_token_hash)
+      VALUES (${userId}, ${fp}, ${hash})
+      RETURNING id`) as unknown as { id: string }[];
+  })) as unknown as { id: string }[];
   return { id: rows[0].id };
 }
 
