@@ -35,8 +35,16 @@ export async function POST(req: Request) {
       return NextResponse.json(data, { status });
     };
     // ponytail: billing Token atomik (PRD §4.3/§6) — vendor gagal (!ok, non-402) = refund otomatis.
+    // Production anon = 401 tanpa panggil provider; dev tanpa workspace = demo tanpa tagihan.
     const wsId = await workspaceIdForRequest(req);
-    if (!wsId) return run();
+    if (!wsId) {
+      if (process.env.NODE_ENV === "production")
+        return NextResponse.json(
+          { error: { code: "UNAUTHORIZED", message: "Belum login." } },
+          { status: 401 },
+        );
+      return run();
+    }
     try {
       return await withTokens(wsId, imageCost(finalModel), run, {
         modelId: finalModel,
