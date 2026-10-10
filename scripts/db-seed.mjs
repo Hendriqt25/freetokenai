@@ -122,6 +122,33 @@ try {
       SELECT 1 FROM token_transactions WHERE workspace_id = ${row[0].id} AND type = 'grant'
     )`;
 
+  // Contoh usage per cafe (TASK-025): 3 endpoint x 2 cafe, idempoten — agar
+  // halaman super admin langsung menampilkan data. Atribusi via cafe_id
+  // langsung (kolom 0002); workspace per cafe dibuat bila belum ada.
+  for (const slug of ["kopi-senja", "warung-lestari"]) {
+    const cid = cafes[slug];
+    let w = await sql`
+      SELECT id FROM workspaces WHERE cafe_id = ${cid} ORDER BY created_at LIMIT 1`;
+    if (!w[0]) {
+      w = await sql`
+        INSERT INTO workspaces (user_id, token_balance, expires_at, cafe_id)
+        VALUES (${devId}, 1500, now() + interval '7 days', ${cid})
+        RETURNING id`;
+    }
+    const wid = w[0].id;
+    const has = await sql`
+      SELECT 1 FROM usage_logs ul LEFT JOIN workspaces w2 ON w2.id = ul.workspace_id
+      WHERE COALESCE(ul.cafe_id, w2.cafe_id) = ${cid} LIMIT 1`;
+    if (!has[0]) {
+      await sql`
+        INSERT INTO usage_logs (workspace_id, cafe_id, model_id, tokens_burned, endpoint_type, status, created_at)
+        VALUES
+          (${wid}, ${cid}, 'gemini-flash', 120, 'chat', 'success', now() - interval '2 days'),
+          (${wid}, ${cid}, 'imagen-3', 800, 'image', 'success', now() - interval '1 day'),
+          (${wid}, ${cid}, 'veo-3', 2500, 'video', 'success', now())`;
+    }
+  }
+
   const check = await sql`SELECT token_balance, expires_at FROM workspaces WHERE id = ${row[0].id}`;
   const users = await sql`SELECT role, COALESCE(cafe_id::text, '-') AS cafe FROM users ORDER BY email`;
   console.log(
