@@ -43,24 +43,21 @@ export function clearedSessionCookie(): string {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
-export async function countSessions(userId: string): Promise<number> {
-  const rows = (await sql`SELECT COUNT(*)::int AS n FROM sessions WHERE user_id = ${userId}`) as unknown as {
-    n: number;
-  }[];
-  return rows[0]?.n ?? 0;
-}
-
 // ponytail: device ke-3 = revoke oldest dalam 1 transaksi (PRD §2/§4.2/§5.3).
-// SELECT ... FOR UPDATE + DELETE + INSERT atomik — tanpa TOCTOU, tanpa 403.
+// Lock baris users dulu — SELECT sessions FOR UPDATE tak serialize insert paralel
+// (phantom di READ COMMITTED); lock users serialize semua createSession per-user.
 export async function createSession(userId: string, fingerprint: string): Promise<{ id: string }> {
   const hash = randomBytes(32).toString("hex");
   const fp = fingerprint.slice(0, 255) || "unknown";
   const rows = (await sql.begin(async (tx: any) => {
+    await tx`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
     const existing = (await tx`
       SELECT id FROM sessions WHERE user_id = ${userId}
       ORDER BY last_active ASC FOR UPDATE`) as unknown as { id: string }[];
-    if (existing.length >= MAX_DEVICES && existing[0]) {
-      await tx`DELETE FROM sessions WHERE id = ${existing[0].id}`;
+    const overflow = existing.length - MAX_DEVICES + 1;
+    if (overflow > 0) {
+      const victims = existing.slice(0, overflow).map((s) => s.id);
+      await tx`DELETE FROM sessions WHERE id = ANY(${victims})`;
     }
     return (await tx`
       INSERT INTO sessions (user_id, device_fingerprint, refresh_token_hash)
