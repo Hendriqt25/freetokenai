@@ -43,9 +43,9 @@ async function streamGroq(
         { role: "user", content: message },
       ],
       stream: true,
-      cache: "no-store",
     }),
     signal,
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -113,9 +113,9 @@ async function streamGemini(
       body: JSON.stringify({
         contents,
         systemInstruction: { parts: [{ text: SYSTEM_ID }] },
-        cache: "no-store",
       }),
       signal,
+      cache: "no-store",
     },
   );
 
@@ -268,7 +268,7 @@ export async function POST(req: Request) {
             endpointType: "chat",
             onUsageLogged: (id) => { usageId = id; },
           },
-          new AbortSignal(),
+          req.signal,
         );
 
         sessionIdFinal = await saveChatTurn(wsId!, sessionIdFinal, message, result.reply, usageId);
