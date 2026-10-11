@@ -277,12 +277,6 @@ export async function getServerSession(): Promise<AuthContext | null> {
   return { user: rows[0], sessionId: sid };
 }
 
-export async function getSuperAdminSession(): Promise<AuthContext | null> {
-  const session = await getServerSession();
-  if (!session || session.user.role !== 'super_admin') return null;
-  return session;
-}
-
 export function sessionCookieHeader(sessionId: string): string {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   return `${SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`;
@@ -322,57 +316,3 @@ export async function devSeedUserId(): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
-// ponytail: admin auth (TASK-023 / 0003) — scrypt + PEPPER + refresh SHA-256 di admin_sessions.
-// Bearer token pendek umur (akses) + refresh httpOnly cookie; 2 origin (admin.app + kasir.app).
-const ADMIN_PEPPER = process.env.ADMIN_PASSWORD_PEPPER ?? "dev-only-pepper-TASK023";
-
-function parseAdminHash(hash: string): { salt: Buffer; key: Buffer } | null {
-  const m = /^scrypt\$(\d+)\$([a-f0-9]+)\$([a-f0-9]+)$/i.exec(hash);
-  if (!m) return null;
-  return { salt: Buffer.from(m[2], "hex"), key: Buffer.from(m[3], "hex") };
-}
-
-export async function verifyAdminPassword(userId: string, password: string): Promise<boolean> {
-  const rows = (await sql`SELECT admin_password_hash FROM users WHERE id = ${userId} LIMIT 1`) as unknown as { admin_password_hash: string | null }[];
-  const hash = rows[0]?.admin_password_hash;
-  if (!hash) return false;
-  const parsed = parseAdminHash(hash);
-  if (!parsed) return false;
-  const { salt, key } = parsed;
-  const derived = await new Promise<Buffer>((resolve, reject) => {
-    require("node:crypto").scrypt(password + ADMIN_PEPPER, salt, 64, { N: 16384, r: 8, p: 1 }, (err: Error | null, d: Buffer) => err ? reject(err) : resolve(d));
-  });
-  return derived.equals(key);
-}
-
-export async function createAdminSession(userId: string, origin?: string): Promise<{ accessToken: string; refreshToken: string }> {
-  const refreshRaw = randomBytes(32).toString("hex");
-  const refreshHash = require("node:crypto").createHash("sha256").update(refreshRaw).digest("hex");
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 hari
-  await sql`
-    INSERT INTO admin_sessions (user_id, refresh_token_hash, origin, expires_at)
-    VALUES (${userId}, ${refreshHash}, ${origin ?? null}, ${expiresAt.toISOString()})`;
-  const accessToken = require("node:crypto").createHash("sha256").update(refreshRaw + ADMIN_PEPPER).digest("hex").slice(0, 32);
-  return { accessToken, refreshToken: refreshRaw };
-}
-
-export async function requireAdminAuth(req: Request): Promise<AuthContext | null> {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  const token = authHeader.slice(7);
-  const tokenHash = require("node:crypto").createHash("sha256").update(token + ADMIN_PEPPER).digest("hex").slice(0, 32);
-  const rows = (await sql`
-    SELECT u.id, u.name, u.email, u.phone_number, u.avatar_url, u.role, a.id AS session_id
-    FROM admin_sessions a JOIN users u ON u.id = a.user_id
-    WHERE a.refresh_token_hash = ${tokenHash} AND a.expires_at > now()
-    LIMIT 1`) as unknown as (AuthUser & { session_id: string })[];
-  if (!rows[0]) return null;
-  await sql`UPDATE admin_sessions SET expires_at = now() + interval '30 days' WHERE id = ${rows[0].session_id}`;
-  return { user: rows[0], sessionId: rows[0].session_id };
-}
-
-export async function requireKasirAuth(req: Request): Promise<AuthContext | null> {
-  const auth = await requireAdminAuth(req);
-  if (!auth || auth.user.role !== 'kasir') return null;
-  return auth;
-}

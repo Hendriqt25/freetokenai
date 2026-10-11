@@ -1,19 +1,21 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/auth';
 import Link from 'next/link';
-import { LayoutDashboard, Building2, BarChart3, LogOut, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, Building2, ChevronLeft } from 'lucide-react';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
   const user = session?.user;
 
-  if (!user || user.role !== 'super_admin') {
+  if (!user) {
+    redirect('/admin/login');
+  }
+  if (user.role !== 'super_admin') {
     redirect('/dashboard');
   }
 
   const navItems = [
     { href: '/admin', label: 'Daftar Cafe', icon: Building2 },
-    { href: '/admin', label: 'Penggunaan API', icon: BarChart3 },
   ];
 
   return (
