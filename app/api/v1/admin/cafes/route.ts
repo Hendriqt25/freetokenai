@@ -1,49 +1,29 @@
-import { NextResponse } from "next/server";
-import { corsHeaders, requireAdmin, requireAllowedOrigin } from "@/lib/admin-auth";
-import { sql } from "@/lib/db";
-
-// ponytail: GET /api/v1/admin/cafes — daftar cafe + sisa kuota + akumulasi
-// token granted + workspace aktif. Satu query, subselect skalar (tanpa JOIN
-// fanout). Hanya super_admin; kasir -> 403 via requireAdmin roles.
-export async function OPTIONS(req: Request) {
-  const origin = requireAllowedOrigin(req);
-  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) });
-}
+import { NextResponse } from 'next/server';
+import { sql } from '@/lib/db';
+import { requireSuperAdmin } from '@/lib/auth';
 
 export async function GET(req: Request) {
-  const origin = requireAllowedOrigin(req);
-  if (origin === "denied")
-    return NextResponse.json(
-      { error: { code: "FORBIDDEN_ORIGIN", message: "Origin tidak diizinkan." } },
-      { status: 403, headers: corsHeaders(null) },
-    );
-  const auth = await requireAdmin(req, { roles: ["super_admin"] });
-  if (typeof auth === "string")
-    return NextResponse.json(
-      { error: { code: auth.toUpperCase(), message: "Akses super admin tidak sah." } },
-      { status: auth === "unauthorized" ? 401 : 403, headers: corsHeaders(origin) },
-    );
-  const rows = (await sql`
-    SELECT c.id, c.slug, c.name, c.prepaid_token_balance, c.is_active,
-      COALESCE((SELECT SUM(amount) FROM cafe_token_transactions WHERE cafe_id = c.id AND type = 'topup'), 0)::int AS total_topup,
-      COALESCE((SELECT SUM(tokens_granted) FROM receipts WHERE cafe_id = c.id), 0)::int AS total_tokens_granted,
-      COALESCE((
-        SELECT SUM(ul.tokens_burned) FROM usage_logs ul
-        LEFT JOIN workspaces w ON w.id = ul.workspace_id
-        WHERE COALESCE(ul.cafe_id, w.cafe_id) = c.id
-      ), 0)::int AS total_tokens_burned,
-      (SELECT COUNT(*)::int FROM workspaces WHERE cafe_id = c.id AND expires_at > now()) AS active_workspaces
-    FROM cafes c
-    ORDER BY c.created_at`) as unknown as Array<{
-    id: string;
-    slug: string;
-    name: string;
-    prepaid_token_balance: number;
-    is_active: boolean;
-    total_topup: number;
-    total_tokens_granted: number;
-    total_tokens_burned: number;
-    active_workspaces: number;
-  }>;
-  return NextResponse.json({ cafes: rows }, { headers: corsHeaders(origin) });
+  const auth = await requireSuperAdmin(req);
+  if (!auth) return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'Hanya super_admin.' } }, { status: 403 });
+
+  try {
+    const cafes = (await sql`
+      SELECT
+        c.id,
+        c.name,
+        COALESCE((SELECT SUM(amount) FROM cafe_token_transactions WHERE cafe_id = c.id AND type = 'topup'), c.prepaid_token_balance)::int AS prepaid_quota,
+        c.prepaid_token_balance AS token_balance,
+        (SELECT MAX(expires_at) FROM workspaces WHERE cafe_id = c.id) AS expires_at,
+        (SELECT COUNT(*)::int FROM workspaces WHERE cafe_id = c.id AND expires_at > now()) AS active_workspaces,
+        COALESCE((SELECT SUM(tt.amount) FROM token_transactions tt JOIN workspaces w ON w.id = tt.workspace_id WHERE w.cafe_id = c.id AND tt.type = 'grant'), 0)::int AS total_granted
+      FROM cafes c
+      ORDER BY c.created_at DESC`) as unknown as {
+      id: string; name: string; prepaid_quota: number; token_balance: number; expires_at: string | null;
+      active_workspaces: number; total_granted: number;
+    }[];
+
+    return NextResponse.json({ cafes });
+  } catch (e) {
+    return NextResponse.json({ error: { code: 'SERVER_ERROR', message: 'Gagal memuat cafe' } }, { status: 500 });
+  }
 }
