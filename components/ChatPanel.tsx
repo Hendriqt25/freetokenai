@@ -2,7 +2,7 @@
 
 import { Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { appendChatMessage, CHAT_CHANGED, CHAT_NEW, createChatSession, getChatMessages, hydrateMessages } from "@/lib/chat-history";
 import { CHAT_JOBS_CHANGED, isChatRunning, startChatJob, stopChatJob, subscribeChatJobs } from "@/lib/chat-jobs";
 import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
@@ -114,6 +114,103 @@ function UserBubble({ text }: { text: string }) {
   );
 }
 
+// ponytail: hook streaming chat — handle SSE, incremental render, error/stop.
+function useStreamingChat() {
+  const [streamingText, setStreamingText] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const onDoneRef = useRef<((sessionId: string, reply: string) => void) | null>(null);
+  const onErrorRef = useRef<((err: string) => void) | null>(null);
+  const onStopRef = useRef<(() => void) | null>(null);
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    onStopRef.current?.();
+  }, []);
+
+  const start = useCallback(async (
+    sessionId: string,
+    message: string,
+    history: { role: string; content: string }[],
+    model: string,
+    onDone: (sessionId: string, reply: string) => void,
+    onError: (err: string) => void,
+    onStop: () => void,
+  ) => {
+    if (isStreaming) return;
+    onDoneRef.current = onDone;
+    onErrorRef.current = onError;
+    onStopRef.current = onStop;
+
+    setIsStreaming(true);
+    setStreamingText("");
+    abortRef.current = new AbortController();
+
+    try {
+      const res = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, history, model, session_id: sessionId }),
+        signal: abortRef.current.signal,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (!data) continue;
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.error) {
+                throw new Error(parsed.error.message);
+              }
+              if (parsed.text) {
+                setStreamingText((prev) => prev + parsed.text);
+              }
+              if (parsed.done) {
+                setIsStreaming(false);
+                onDoneRef.current?.(parsed.sessionId ?? sessionId, streamingText + (parsed.text ?? ""));
+                return;
+              }
+            } catch (e) {
+              if (e instanceof Error && e.message.includes("HTTP")) throw e;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        onStopRef.current?.();
+      } else {
+        onErrorRef.current?.(e instanceof Error ? e.message : "Streaming gagal");
+      }
+      setIsStreaming(false);
+    }
+  }, [isStreaming, streamingText]);
+
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
+
+  return { streamingText, isStreaming, start, stop };
+}
+
 export default function ChatPanel({ sessionId }: { sessionId?: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -124,8 +221,12 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
       return DEFAULT_CHAT_MODEL;
     }
   });
+  const [streamingReply, setStreamingReply] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const assistantMsgIdRef = useRef<string>("");
+  const { streamingText, isStreaming: hookIsStreaming, start, stop } = useStreamingChat();
 
   function reloadMessages(id: string) {
     setMessages(
@@ -162,11 +263,12 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isSending]);
+  }, [messages, isSending, streamingReply]);
 
   // ponytail: klik kotak saat loading = stop job yang jalan (di module, bukan ref).
   function handleStop() {
     if (sessionId) stopChatJob(sessionId);
+    stop();
   }
 
   async function handleSend(text: string) {
@@ -187,14 +289,51 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
     const userMsg = { id: crypto.randomUUID(), role: "user" as const, text: trimmed };
     setMessages((prev) => [...prev, userMsg]);
     appendChatMessage(target, "user", trimmed);
+
+    // ponytail: streaming path — show incremental, then hydrate from DB on done.
+    assistantMsgIdRef.current = crypto.randomUUID();
+    setStreamingReply("");
+    setIsStreaming(true);
     setIsSending(true);
-    startChatJob({
-      sessionId: target,
-      message: trimmed,
-      // ponytail: chat via proxy server /api/chat (key aman di server), bawa 20 pesan terakhir.
-      history: [...messages, userMsg].slice(-21, -1).map((m) => ({ role: m.role, content: m.text })),
+
+    const historyForApi = [...messages, userMsg].slice(-21, -1).map((m) => ({ role: m.role, content: m.text }));
+
+    start(
+      target,
+      trimmed,
+      historyForApi,
       model,
-    });
+      (finalSessionId, reply) => {
+        setIsStreaming(false);
+        setIsSending(false);
+        // Replace streaming placeholder with final message
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgIdRef.current ? { ...m, text: reply } : m))
+        );
+        // Hydrate from DB to get usage_log_id linkage
+        void hydrateMessages(finalSessionId);
+        if (isNew) router.replace(`/dashboard/chat/${finalSessionId}`);
+      },
+      (err) => {
+        setIsStreaming(false);
+        setIsSending(false);
+        const errMsg = `Maaf, ${err}`;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgIdRef.current ? { ...m, text: errMsg, isError: true } : m))
+        );
+      },
+      () => {
+        setIsStreaming(false);
+        setIsSending(false);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgIdRef.current ? { ...m, text: "Dihentikan." } : m))
+        );
+      }
+    );
+
+    // Add streaming placeholder
+    setMessages((prev) => [...prev, { id: assistantMsgIdRef.current, role: "assistant", text: "" }]);
+
     if (isNew) router.replace(`/dashboard/chat/${target}`);
   }
 
@@ -222,7 +361,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
             ))}
           </div>
 
-          <ChatInput onSend={handleSend} onStop={handleStop} isSending={isSending} model={model} onModelChange={setModel} />
+          <ChatInput onSend={handleSend} onStop={handleStop} isSending={isSending || isStreaming} model={model} onModelChange={setModel} />
         </div>
       </div>
     );
@@ -239,13 +378,16 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
               <AssistantBubble key={message.id} text={message.text} isError={message.isError} />
             ),
           )}
-          {isSending && <TypingIndicator />}
+          {isStreaming && (
+            <AssistantBubble key={assistantMsgIdRef.current} text={streamingText} />
+          )}
+          {!isStreaming && isSending && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
       </div>
 
       <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6 md:pb-6">
-        <ChatInput onSend={handleSend} onStop={handleStop} isSending={isSending} model={model} onModelChange={setModel} compact />
+        <ChatInput onSend={handleSend} onStop={handleStop} isSending={isSending || isStreaming} model={model} onModelChange={setModel} compact />
       </div>
     </div>
   );

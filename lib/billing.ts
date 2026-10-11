@@ -174,3 +174,73 @@ export async function workspaceIdForRequest(req: Request): Promise<string | null
     ORDER BY created_at LIMIT 1`) as unknown as { id: string }[];
   return rows[0]?.id ?? null;
 }
+
+// ponytail: streaming metered-deduct (PRD §4.3) — pre-check min 5 token,
+// provider stream, hitung incremental, stop finish_reason=token_exhausted,
+// deduct presisi setelah stream (tokens_terkirim * rate/1k) dalam transaksi
+// yang sama dengan chat_messages insert. Saldo tak pernah negatif.
+export interface StreamMeteredResult {
+  totalTokens: number;
+  finishReason: "stop" | "token_exhausted" | "error";
+  reply: string;
+}
+
+export async function withTokensStream(
+  workspaceId: string,
+  costPer1k: number,
+  streamFn: (onChunk: (text: string, done: boolean, usage?: { promptTokens: number; completionTokens: number; totalTokens: number }) => void, signal: AbortSignal) => Promise<void>,
+  meta: BillingMeta,
+  signal: AbortSignal,
+): Promise<StreamMeteredResult> {
+  const balance = await balanceOf(workspaceId);
+  if (balance < 5) throw new InsufficientTokensError(balance);
+
+  const reqId = newRequestId();
+  const t0 = Date.now();
+  const done = (status: number, ok: boolean, note?: string) =>
+    logReq({ reqId, workspaceId, endpoint: meta.endpointType, latencyMs: Date.now() - t0, status, ok, note });
+
+  let reply = "";
+  let totalTokens = 0;
+  let finishReason: StreamMeteredResult["finishReason"] = "stop";
+
+  await streamFn(
+    (text, done, usage) => {
+      if (done) {
+        if (usage) totalTokens = usage.totalTokens;
+      } else {
+        reply += text;
+        totalTokens += countTokens(text);
+        const tokensAllowed = Math.floor(balance / costPer1k) * 1000;
+        if (totalTokens > tokensAllowed) {
+          finishReason = "token_exhausted";
+          throw new Error("TOKEN_EXHAUSTED");
+        }
+      }
+    },
+    signal,
+  ).catch((e) => {
+    if (e instanceof Error && e.message === "TOKEN_EXHAUSTED") {
+      return;
+    }
+    throw e;
+  });
+
+  const actualTokens = totalTokens || 0;
+  const cost = Math.ceil((actualTokens / 1000) * costPer1k);
+
+  if (cost > 0) {
+    const deducted = await deduct(workspaceId, cost);
+    if (!deducted) throw new InsufficientTokensError(await balanceOf(workspaceId));
+    await logBurn(workspaceId, cost, meta, deducted.ledgerId);
+    done(200, true);
+  } else {
+    done(200, true);
+  }
+
+  return { totalTokens: actualTokens, finishReason, reply };
+}
+
+function countTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
