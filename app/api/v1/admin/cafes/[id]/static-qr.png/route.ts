@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
-import { corsHeaders, requireAdmin, requireAllowedOrigin } from "@/lib/admin-auth";
+import { corsHeaders, requireAdmin, requireAllowedOrigin } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 // ponytail: GET /api/v1/admin/cafes/:id/static-qr.png — QR statis per cafe
@@ -47,7 +47,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     headers: {
       ...corsHeaders(origin),
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=86400",
+      "Cache-Control": "public, max-age=3600",
     },
   });
 }

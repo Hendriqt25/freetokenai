@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { corsHeaders, loginByPassword, requireAllowedOrigin } from "@/lib/admin-auth";
+import { corsHeaders, loginByPassword, requireAllowedOrigin } from "@/lib/auth";
 
 // ponytail: login admin bearer lintas origin (PRD §7.1). Tidak memakai cookie web
 // SameSite=Lax — kasir/ui standalone admin.restoran.com beda origin. Origin salah

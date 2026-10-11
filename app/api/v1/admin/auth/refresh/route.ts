@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { corsHeaders, createAccessToken, requireAllowedOrigin, rotateRefreshToken } from "@/lib/admin-auth";
+import { corsHeaders, createAccessToken, requireAllowedOrigin, rotateRefreshToken } from "@/lib/auth";
 
 // ponytail: refresh rotation — refresh token dipakai sekali (row dihapus saat
 // dipakai, pola sessions), lalu terbitkan pasangan access(baru, pendek) + refresh(baru).

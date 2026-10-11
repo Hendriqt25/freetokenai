@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { corsHeaders, requireAdmin, requireAllowedOrigin } from "@/lib/admin-auth";
+import { corsHeaders, requireAdmin, requireAllowedOrigin } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 // ponytail: GET /api/v1/admin/cafes/:id/usage — agregat usage_logs per cafe:

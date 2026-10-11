@@ -1,4 +1,5 @@
-import { randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
 import { sql } from "./db";
 
 // ponytail: auth cookie minimal di atas tabel sessions PRD §5.3. Cookie = id sesi,
@@ -6,12 +7,235 @@ import { sql } from "./db";
 export const SESSION_COOKIE = "ftai_session";
 export const MAX_DEVICES = 2;
 
+// ---- Admin auth (Bearer token cross-origin untuk kasir/ui standalone) ----
+// PRD §4.1: admin.restoran.com beda origin dari web app, cookie SameSite=Lax tak cocok.
+// Bearer token pendek umur (akses) + refresh httpOnly cookie; HS256 via node:crypto (stdlib).
+// Refresh token di-hash SHA-256 di tabel admin_sessions (pola sessions).
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET ?? "dev-only-admin-jwt-secret";
+const ACCESS_TTL_SECONDS = Number(process.env.ADMIN_ACCESS_TTL ?? 900); // 15 menit
+const REFRESH_TTL_SECONDS = Number(process.env.ADMIN_REFRESH_TTL ?? 604800); // 7 hari
+const MAX_REFRESH_SESSIONS = 5;
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "https://admin.restoran.com",
+];
+export function allowedOrigins(): string[] {
+  const extra = (process.env.ADMIN_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [...DEFAULT_ALLOWED_ORIGINS, ...extra];
+}
+export function corsHeaders(origin: string | null) {
+  return {
+    ...(origin ? { "Access-Control-Allow-Origin": origin } : {}),
+    Vary: "Origin",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  };
+}
+export function requireAllowedOrigin(req: Request): string | null | "denied" {
+  const origin = (req.headers.get("origin") ?? "").trim() || null;
+  if (!origin) return null;
+  return allowedOrigins().includes(origin) ? origin : "denied";
+}
+
+function b64url(buf: Buffer) {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64urlDecode(s: string) {
+  return Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+}
+function partSig(header: string, payload: string) {
+  return createHmac("sha256", ADMIN_JWT_SECRET).update(`${header}.${payload}`).digest();
+}
+export function createAccessToken(user: AdminUser): string {
+  const header = b64url(Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+  const now = Math.floor(Date.now() / 1000);
+  const payload = b64url(
+    Buffer.from(
+      JSON.stringify({ sub: user.id, role: user.role, cafe_id: user.cafe_id, iat: now, exp: now + ACCESS_TTL_SECONDS }),
+    ),
+  );
+  return `${header}.${payload}.${b64url(partSig(header, payload))}`;
+}
+export type AdminUser = {
+  id: string;
+  role: "kasir" | "super_admin";
+  cafe_id: string | null;
+};
+export type AccessClaims = {
+  sub: string;
+  role: "kasir" | "super_admin";
+  cafe_id: string | null;
+  exp: number;
+};
+export function verifyAccessToken(token: string): AccessClaims | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [header, payload, sig] = parts;
+  const expected = b64url(partSig(header, payload));
+  const got = sig ?? "";
+  if (expected.length !== got.length) return null;
+  let ok = false;
+  try {
+    ok = timingSafeEqual(Buffer.from(expected), Buffer.from(got));
+  } catch {
+    return null;
+  }
+  if (!ok) return null;
+  try {
+    const parsed = JSON.parse(b64urlDecode(payload).toString("utf8")) as AccessClaims;
+    if (typeof parsed.exp !== "number" || parsed.exp < Math.floor(Date.now() / 1000)) return null;
+    if (!["kasir", "super_admin"].includes(parsed.role)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+// ---- Password (scrypt + salt; verifikasi deterministik harga-tetap) ----
+// Format disimpan: scrypt$1$<salt-hex>$<key-hex>
+const ADMIN_PASSWORD_PEPPER = process.env.ADMIN_PASSWORD_PEPPER ?? "dev-only-pepper-TASK023";
+const SCRYPT_N = 16384, SCRYPT_R = 8, SCRYPT_P = 1, SCRYPT_KEYLEN = 64;
+export function hashPassword(password: string): string {
+  if (password.length < 8 || password.length > 128)
+    throw new Error("Password harus 8–128 karakter.");
+  const salt = randomBytes(16);
+  const key = scryptSync(password + ADMIN_PASSWORD_PEPPER, salt, SCRYPT_KEYLEN, {
+    N: SCRYPT_N,
+    r: SCRYPT_R,
+    p: SCRYPT_P,
+  });
+  return `scrypt$1$${salt.toString("hex")}$${key.toString("hex")}`;
+}
+export function verifyPassword(password: string, stored: string): boolean {
+  const parts = stored.split("$");
+  if (parts.length !== 4 || parts[0] !== "scrypt") return false;
+  const [, , saltHex, keyHex] = parts;
+  if (!/^[0-9a-f]+$/i.test(saltHex) || !/^[0-9a-f]+$/i.test(keyHex)) return false;
+  const key = scryptSync(password + ADMIN_PASSWORD_PEPPER, Buffer.from(saltHex, "hex"), SCRYPT_KEYLEN, {
+    N: SCRYPT_N,
+    r: SCRYPT_R,
+    p: SCRYPT_P,
+  });
+  return timingSafeEqual(key, Buffer.from(keyHex, "hex"));
+}
+
+// ---- Refresh token (raw hanya di respons; DB menyimpan hash) ----
+export function issueRefreshToken(): { raw: string; hash: string; expiresAt: Date } {
+  const raw = randomBytes(32).toString("base64url");
+  const hash = createHash("sha256").update(raw).digest("hex");
+  const expiresAt = new Date(Date.now() + REFRESH_TTL_SECONDS * 1000);
+  return { raw, hash, expiresAt };
+}
+// ponytail: login/refresh admin = 1 baris admin_sessions; kelebihan cap = evict
+// paling lama (pola createSession lib/auth.ts). Bukan security boundary — abuse
+// refresh sama dengan punya refresh, cap ini hanya pembatas bloat.
+export async function saveRefreshSession(
+  user: AdminUser,
+  hash: string,
+  expiresAt: Date,
+  origin: string | null,
+): Promise<void> {
+  await sql.begin(async (tx: any) => {
+    await tx`DELETE FROM admin_sessions WHERE user_id = ${user.id} AND expires_at <= now()`;
+    const existing = (await tx`
+      SELECT id FROM admin_sessions WHERE user_id = ${user.id}
+      ORDER BY created_at DESC`) as unknown as { id: string }[];
+    const overflow = existing.length - MAX_REFRESH_SESSIONS + 1;
+    if (overflow > 0) {
+      const victims = existing.slice(existing.length - overflow).map((s) => s.id);
+      await tx`DELETE FROM admin_sessions WHERE id = ANY(${victims})`;
+    }
+    await tx`
+      INSERT INTO admin_sessions (user_id, refresh_token_hash, origin, expires_at)
+      VALUES (${user.id}, ${hash}, ${origin}, ${expiresAt.toISOString()})`;
+  });
+}
+// Refresh rotation: token lama dihapus SAAT dipakai (satu pakai), lalu terbitkan
+// admin_sessions baru. Return null bila refresh token invalid/expired/revoked.
+export async function rotateRefreshToken(
+  raw: string,
+  origin: string | null,
+): Promise<{ user: AdminUser; refreshToken: string; refreshHash: string; refreshExpiresAt: Date } | null> {
+  const hash = createHash("sha256").update(raw).digest("hex");
+  const out = (await sql.begin(async (tx: any) => {
+    const s = (await tx`
+      DELETE FROM admin_sessions WHERE refresh_token_hash = ${hash} AND expires_at > now()
+      RETURNING user_id`) as unknown as { user_id: string }[];
+    if (!s[0]) return null;
+    const u = (await tx`
+      SELECT id, role, cafe_id FROM users
+      WHERE id = ${s[0].user_id} AND role IN ('kasir', 'super_admin')
+      LIMIT 1`) as unknown as AdminUser[];
+    if (!u[0]) return null;
+    return u[0];
+  })) as unknown as AdminUser | null;
+  if (!out) return null;
+  const rt = issueRefreshToken();
+  await saveRefreshSession(out, rt.hash, rt.expiresAt, origin);
+  return { user: out, refreshToken: rt.raw, refreshHash: rt.hash, refreshExpiresAt: rt.expiresAt };
+}
+
+// PRD §7.1: login kasir/super_admin -> {access_token, refresh_token, user}.
+// Password admin tersimpan di users.admin_password_hash (0003); non-admin di-reject.
+export async function loginByPassword(
+  emailOrPhone: string,
+  password: string,
+  origin: string | null,
+): Promise<{
+  user: AdminUser;
+  accessToken: string;
+  refreshToken: string;
+} | null> {
+  const id = emailOrPhone.trim().toLowerCase();
+  const rows = (await sql`
+    SELECT id, role, cafe_id, admin_password_hash FROM users
+    WHERE (lower(email) = ${id} OR phone_number = ${emailOrPhone.trim()})
+      AND role IN ('kasir', 'super_admin')
+    LIMIT 1`) as unknown as Array<AdminUser & { admin_password_hash: string | null }>;
+  const row = rows[0];
+  if (!row || !row.admin_password_hash || !verifyPassword(password, row.admin_password_hash))
+    return null;
+  const user: AdminUser = { id: row.id, role: row.role, cafe_id: row.cafe_id };
+  const rt = issueRefreshToken();
+  await saveRefreshSession(user, rt.hash, rt.expiresAt, origin);
+  return { user, accessToken: createAccessToken(user), refreshToken: rt.raw };
+}
+
+// ---- Autentikasi request (Bearer JWT) ----
+export function bearerToken(req: Request): string | null {
+  const auth = (req.headers.get("authorization") ?? "").trim();
+  const m = /^Bearer\s+([A-Za-z0-9._-]+)$/u.exec(auth);
+  return m ? m[1] : null;
+}
+// guard origin + role + (opsional) cafe milik kasir. Return AdminAuth atau kode
+// error string; route memetakan kode -> status (401/403).
+export async function requireAdmin(
+  req: Request,
+  opts: { roles?: Array<AdminUser["role"]>; cafeId?: string } = {},
+): Promise<{ user: AdminUser; sessionId: string } | "unauthorized" | "forbidden-origin" | "forbidden-role" | "forbidden-cafe"> {
+  const origin = requireAllowedOrigin(req);
+  if (origin === "denied") return "forbidden-origin";
+  const token = bearerToken(req);
+  const claims = token ? verifyAccessToken(token) : null;
+  if (!claims) return "unauthorized";
+  if (opts.roles && !opts.roles.includes(claims.role)) return "forbidden-role";
+  if (opts.cafeId && claims.role !== "super_admin" && claims.cafe_id !== opts.cafeId)
+    return "forbidden-cafe";
+  return { user: { id: claims.sub, role: claims.role, cafe_id: claims.cafe_id }, sessionId: "" };
+}
+
 export type AuthUser = {
   id: string;
   name: string | null;
   email: string | null;
   phone_number: string | null;
   avatar_url: string | null;
+  role?: string;
 };
 
 export type AuthContext = { user: AuthUser; sessionId: string };
@@ -26,12 +250,37 @@ export async function requireAuth(req: Request): Promise<AuthContext | null> {
   const sid = sessionIdFrom(req);
   if (!sid) return null;
   const rows = (await sql`
-    SELECT u.id, u.name, u.email, u.phone_number, u.avatar_url
+    SELECT u.id, u.name, u.email, u.phone_number, u.avatar_url, u.role
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.id = ${sid} LIMIT 1`) as unknown as AuthUser[];
   if (!rows[0]) return null;
   await sql`UPDATE sessions SET last_active = now() WHERE id = ${sid}`;
   return { user: rows[0], sessionId: sid };
+}
+
+export async function requireSuperAdmin(req: Request): Promise<AuthContext | null> {
+  const auth = await requireAuth(req);
+  if (!auth || auth.user.role !== 'super_admin') return null;
+  return auth;
+}
+
+export async function getServerSession(): Promise<AuthContext | null> {
+  const cookieStore = await cookies();
+  const sid = cookieStore.get(SESSION_COOKIE)?.value;
+  if (!sid || !/^[0-9a-f-]{8,36}$/iu.test(sid)) return null;
+  const rows = (await sql`
+    SELECT u.id, u.name, u.email, u.phone_number, u.avatar_url, u.role
+    FROM sessions s JOIN users u ON u.id = s.user_id
+    WHERE s.id = ${sid} LIMIT 1`) as unknown as AuthUser[];
+  if (!rows[0]) return null;
+  await sql`UPDATE sessions SET last_active = now() WHERE id = ${sid}`;
+  return { user: rows[0], sessionId: sid };
+}
+
+export async function getSuperAdminSession(): Promise<AuthContext | null> {
+  const session = await getServerSession();
+  if (!session || session.user.role !== 'super_admin') return null;
+  return session;
 }
 
 export function sessionCookieHeader(sessionId: string): string {
@@ -71,4 +320,59 @@ export async function devSeedUserId(): Promise<string | null> {
   const rows = (await sql`
     SELECT id FROM users WHERE email = 'dev@example.com' LIMIT 1`) as unknown as { id: string }[];
   return rows[0]?.id ?? null;
+}
+
+// ponytail: admin auth (TASK-023 / 0003) — scrypt + PEPPER + refresh SHA-256 di admin_sessions.
+// Bearer token pendek umur (akses) + refresh httpOnly cookie; 2 origin (admin.app + kasir.app).
+const ADMIN_PEPPER = process.env.ADMIN_PASSWORD_PEPPER ?? "dev-only-pepper-TASK023";
+
+function parseAdminHash(hash: string): { salt: Buffer; key: Buffer } | null {
+  const m = /^scrypt\$(\d+)\$([a-f0-9]+)\$([a-f0-9]+)$/i.exec(hash);
+  if (!m) return null;
+  return { salt: Buffer.from(m[2], "hex"), key: Buffer.from(m[3], "hex") };
+}
+
+export async function verifyAdminPassword(userId: string, password: string): Promise<boolean> {
+  const rows = (await sql`SELECT admin_password_hash FROM users WHERE id = ${userId} LIMIT 1`) as unknown as { admin_password_hash: string | null }[];
+  const hash = rows[0]?.admin_password_hash;
+  if (!hash) return false;
+  const parsed = parseAdminHash(hash);
+  if (!parsed) return false;
+  const { salt, key } = parsed;
+  const derived = await new Promise<Buffer>((resolve, reject) => {
+    require("node:crypto").scrypt(password + ADMIN_PEPPER, salt, 64, { N: 16384, r: 8, p: 1 }, (err: Error | null, d: Buffer) => err ? reject(err) : resolve(d));
+  });
+  return derived.equals(key);
+}
+
+export async function createAdminSession(userId: string, origin?: string): Promise<{ accessToken: string; refreshToken: string }> {
+  const refreshRaw = randomBytes(32).toString("hex");
+  const refreshHash = require("node:crypto").createHash("sha256").update(refreshRaw).digest("hex");
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 hari
+  await sql`
+    INSERT INTO admin_sessions (user_id, refresh_token_hash, origin, expires_at)
+    VALUES (${userId}, ${refreshHash}, ${origin ?? null}, ${expiresAt.toISOString()})`;
+  const accessToken = require("node:crypto").createHash("sha256").update(refreshRaw + ADMIN_PEPPER).digest("hex").slice(0, 32);
+  return { accessToken, refreshToken: refreshRaw };
+}
+
+export async function requireAdminAuth(req: Request): Promise<AuthContext | null> {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = authHeader.slice(7);
+  const tokenHash = require("node:crypto").createHash("sha256").update(token + ADMIN_PEPPER).digest("hex").slice(0, 32);
+  const rows = (await sql`
+    SELECT u.id, u.name, u.email, u.phone_number, u.avatar_url, u.role, a.id AS session_id
+    FROM admin_sessions a JOIN users u ON u.id = a.user_id
+    WHERE a.refresh_token_hash = ${tokenHash} AND a.expires_at > now()
+    LIMIT 1`) as unknown as (AuthUser & { session_id: string })[];
+  if (!rows[0]) return null;
+  await sql`UPDATE admin_sessions SET expires_at = now() + interval '30 days' WHERE id = ${rows[0].session_id}`;
+  return { user: rows[0], sessionId: rows[0].session_id };
+}
+
+export async function requireKasirAuth(req: Request): Promise<AuthContext | null> {
+  const auth = await requireAdminAuth(req);
+  if (!auth || auth.user.role !== 'kasir') return null;
+  return auth;
 }

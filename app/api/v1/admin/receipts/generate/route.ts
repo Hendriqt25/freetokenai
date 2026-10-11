@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { corsHeaders, requireAdmin, requireAllowedOrigin } from "@/lib/admin-auth";
+import { corsHeaders, requireAdmin, requireAllowedOrigin } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 // ponytail: PRD §7.1 — POST /api/v1/admin/receipts/generate, idempoten via
