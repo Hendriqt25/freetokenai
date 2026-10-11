@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSession, sessionCookieHeader } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { rateLimited, retryAfterSec } from "@/lib/rate-limit";
 
 // ponytail: PRD §4.2/§7.2 — klaim QR struk publik (tanpa auth). Alur:
 //   1) kunci receipt (FOR UPDATE) -> tolak kalau sudah diklaim (409)
@@ -39,6 +40,15 @@ function parseIdentifier(raw: string): { email: string | null; phone: string | n
 }
 
 export async function POST(req: Request) {
+  // ponytail: rate-limit IP 10/menit (sebelum parse body, hemat resource).
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
+  if (await rateLimited(`claim:ip:${ip}`, 10, 60)) {
+    return NextResponse.json(
+      { error: { code: "RATE_LIMITED", message: "Terlalu banyak request dari IP ini." } },
+      { status: 429, headers: { "Retry-After": String(retryAfterSec(60)) } },
+    );
+  }
+
   let body: { code?: unknown; identifier?: unknown; device_fingerprint?: unknown };
   try {
     body = await req.json();
@@ -60,6 +70,16 @@ export async function POST(req: Request) {
       { error: { code: "INVALID_IDENTIFIER", message: "Masukkan No. WhatsApp atau email yang valid." } },
       { status: 400 },
     );
+
+  // ponytail: rate-limit identifier 5/jam (setelah validasi identifier).
+  const identKey = idn.email ?? `phone:${idn.phone}`;
+  if (await rateLimited(`claim:id:${identKey}`, 5, 3600)) {
+    return NextResponse.json(
+      { error: { code: "RATE_LIMITED", message: "Terlalu banyak klaim untuk identifier ini." } },
+      { status: 429, headers: { "Retry-After": String(retryAfterSec(3600)) } },
+    );
+  }
+
   const fingerprint = (
     typeof body.device_fingerprint === "string" && body.device_fingerprint.trim()
       ? body.device_fingerprint
