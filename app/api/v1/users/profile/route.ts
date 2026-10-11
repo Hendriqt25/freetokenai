@@ -44,6 +44,8 @@ export async function PATCH(req: Request) {
   const email = contact && contact.includes("@") ? contact : null;
   const phone = contact && !contact.includes("@") ? contact : null;
   try {
+    // Lock user row untuk prevent race email unique (TASK-039 / TASK-019)
+    await sql`SELECT id FROM users WHERE id = ${auth.user.id} FOR UPDATE`;
     if (name !== null) await sql`UPDATE users SET name = ${name} WHERE id = ${auth.user.id}`;
     if (email !== null)
       await sql`UPDATE users SET email = ${email}, phone_number = NULL WHERE id = ${auth.user.id}`;
