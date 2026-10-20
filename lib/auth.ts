@@ -220,13 +220,22 @@ export async function requireAdmin(
 ): Promise<{ user: AdminUser; sessionId: string } | "unauthorized" | "forbidden-origin" | "forbidden-role" | "forbidden-cafe"> {
   const origin = requireAllowedOrigin(req);
   if (origin === "denied") return "forbidden-origin";
+  let user: AdminUser | null = null;
   const token = bearerToken(req);
   const claims = token ? verifyAccessToken(token) : null;
-  if (!claims) return "unauthorized";
-  if (opts.roles && !opts.roles.includes(claims.role)) return "forbidden-role";
-  if (opts.cafeId && claims.role !== "super_admin" && claims.cafe_id !== opts.cafeId)
+  if (claims) user = { id: claims.sub, role: claims.role, cafe_id: claims.cafe_id };
+  // ponytail: fallback cookie sesi web — UI admin same-origin kirim ftai_session, bukan Bearer.
+  // cafe_id null utk sesi cookie → cek forbidden-cafe fail-closed.
+  if (!user) {
+    const ctx = await requireAuth(req);
+    if (ctx && (ctx.user.role === "kasir" || ctx.user.role === "super_admin"))
+      user = { id: ctx.user.id, role: ctx.user.role as AdminUser["role"], cafe_id: null };
+  }
+  if (!user) return "unauthorized";
+  if (opts.roles && !opts.roles.includes(user.role)) return "forbidden-role";
+  if (opts.cafeId && user.role !== "super_admin" && user.cafe_id !== opts.cafeId)
     return "forbidden-cafe";
-  return { user: { id: claims.sub, role: claims.role, cafe_id: claims.cafe_id }, sessionId: "" };
+  return { user, sessionId: "" };
 }
 
 export type AuthUser = {

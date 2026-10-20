@@ -260,6 +260,9 @@ export async function POST(req: Request) {
                 onChunk("", true, usage);
               } else {
                 onChunk(text, false);
+                // ponytail: teruskan delta ke klien — onChunk billing hanya akumulasi;
+                // enqueue setelah cek budget (bisa throw TOKEN_EXHAUSTED).
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
               }
             }, signal);
           },

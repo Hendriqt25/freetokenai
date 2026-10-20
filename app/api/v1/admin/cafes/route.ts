@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { requireSuperAdmin } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth';
 
 export async function GET(req: Request) {
-  const auth = await requireSuperAdmin(req);
-  if (!auth) return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'Hanya super_admin.' } }, { status: 403 });
+  const auth = await requireAdmin(req, { roles: ['super_admin'] });
+  if (typeof auth === 'string') {
+    const status = auth === 'unauthorized' ? 401 : 403;
+    return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'Hanya super_admin.' } }, { status });
+  }
 
   try {
     const cafes = (await sql`

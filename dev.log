@@ -1,0 +1,31 @@
+
+> resto-ai-web@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.56.1:3000
+- Environments: .env.local
+✓ Ready in 1095ms
+✓ Running next.config.mjs took 35ms
+
+ GET /admin 307 in 2.4s (next.js: 2.1s, application-code: 235ms)
+{"t":"req","ts":"2026-10-11T06:38:50.673Z","reqId":"ca113dfa-c0dc-469a-ad87-63448dcae783","endpoint":"POST /api/v1/admin/auth/cookie-login","note":"gw"}
+ POST /api/v1/admin/auth/cookie-login 500 in 1133ms (next.js: 589ms, proxy.ts: 70ms, application-code: 474ms)
+{"t":"req","ts":"2026-10-11T06:39:01.560Z","reqId":"71818e66-9e2c-4df5-bd1d-0c646e5b26e3","endpoint":"POST /api/v1/admin/auth/cookie-login","note":"gw"}
+ POST /api/v1/admin/auth/cookie-login 500 in 922ms (next.js: 4ms, proxy.ts: 5ms, application-code: 913ms)
+{"t":"req","ts":"2026-10-11T06:43:58.727Z","reqId":"640a1376-898e-4d8f-8e1b-fdc13ece8585","endpoint":"POST /api/v1/admin/auth/cookie-login","note":"gw"}
+ POST /api/v1/admin/auth/cookie-login 200 in 1364ms (next.js: 287ms, proxy.ts: 647ms, application-code: 430ms)
+ GET /admin 200 in 1274ms (next.js: 755ms, application-code: 519ms)
+ GET /admin 307 in 137ms (next.js: 19ms, application-code: 118ms)
+{"t":"req","ts":"2026-10-11T06:44:38.118Z","reqId":"e2852afc-26a2-47a4-806b-46ddc2bb8e07","endpoint":"POST /api/chat/stream","note":"gw"}
+○ Compiling /api/chat/stream ...
+✓ Finished filesystem cache database compaction in 38.0s
+ POST /api/chat/stream 400 in 12.1s (next.js: 11.9s, proxy.ts: 57ms, application-code: 72ms)
+{"t":"req","ts":"2026-10-11T06:45:24.578Z","reqId":"735a7e9b-68ac-462e-bda7-4d21ec228102","endpoint":"POST /api/chat/stream","note":"gw"}
+ POST /api/chat/stream 400 in 35ms (next.js: 10ms, proxy.ts: 13ms, application-code: 12ms)
+{"t":"req","ts":"2026-10-11T06:46:07.160Z","reqId":"1c257b40-0206-4c0d-8864-0722f6116a1f","endpoint":"POST /api/chat/stream","note":"gw"}
+ POST /api/chat/stream 200 in 625ms (next.js: 10ms, proxy.ts: 6ms, application-code: 609ms)
+{"t":"req","ts":"2026-10-11T06:47:06.828Z","reqId":"f24287d4-ed56-4886-a630-3e41b3934ad1","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-11T06:47:07.652Z","reqId":"db4db7f5-dea4-49f8-8ce4-2fb25342251e","ws":"b07d338b-9400-461a-9c4b-ac7a35f74d32","endpoint":"chat","latencyMs":778,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 842ms (next.js: 18ms, proxy.ts: 8ms, application-code: 817ms)
