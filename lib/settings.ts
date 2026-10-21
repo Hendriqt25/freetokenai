@@ -16,6 +16,14 @@ export function notifySettingsChanged() {
 
 export type UserProfile = { name: string; contact: string; avatarUrl: string | null };
 
+// ponytail: default SSR-safe — nilai yang sama dirender server DAN saat hydrate,
+// jangan pernah dibaca dari localStorage saat initial render (hydration mismatch).
+export const DEFAULT_PROFILE: UserProfile = {
+  name: mockUser.name,
+  contact: mockUser.phoneNumber,
+  avatarUrl: null,
+};
+
 const profileKey = () => `ftai:user:${currentUserId()}:profile`;
 const appKey = () => `ftai:user:${currentUserId()}:settings`;
 const devicesKey = () => `ftai:user:${currentUserId()}:devices`;
@@ -38,13 +46,8 @@ function write(k: string, v: unknown) {
 }
 
 export function getProfile(): UserProfile {
-  if (typeof window === "undefined")
-    return { name: mockUser.name, contact: mockUser.phoneNumber, avatarUrl: null };
-  return read<UserProfile>(profileKey(), {
-    name: mockUser.name,
-    contact: mockUser.phoneNumber,
-    avatarUrl: null,
-  });
+  if (typeof window === "undefined") return DEFAULT_PROFILE;
+  return read<UserProfile>(profileKey(), DEFAULT_PROFILE);
 }
 
 export function saveProfile(p: UserProfile) {

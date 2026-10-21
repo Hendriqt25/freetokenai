@@ -60,6 +60,11 @@ export function startMediaJob(args: {
   ratio: string;
   count: number;
   style?: string;
+  formData?: FormData; // for video multipart
+  duration?: number;
+  motion?: string;
+  quality?: string;
+  fps?: number;
 }): string {
   const key = crypto.randomUUID();
   const slots = args.kind === "image" ? args.count : 1;
@@ -71,17 +76,64 @@ export function startMediaJob(args: {
   (async () => {
     try {
       const endpoint = args.kind === "image" ? "/api/images/generate" : "/api/videos/generate";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          args.kind === "image"
-            ? { prompt: args.styledPrompt, model: args.model, aspect_ratio: args.ratio, count: args.count }
-            : { prompt: args.sent, model: args.model, aspect_ratio: args.ratio },
-        ),
-      });
+      let res: Response;
+      if (args.kind === "image") {
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: args.styledPrompt,
+            model: args.model,
+            aspect_ratio: args.ratio,
+            count: args.count,
+          }),
+        });
+      } else if (args.formData) {
+        // Video: multipart/form-data
+        res = await fetch(endpoint, {
+          method: "POST",
+          body: args.formData,
+        });
+      } else {
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: args.sent,
+            model: args.model,
+            aspect_ratio: args.ratio,
+            duration: args.duration ?? 5,
+            motion: args.motion ?? "medium",
+            quality: args.quality ?? "720p",
+            fps: args.fps ?? 30,
+            mode: "t2v",
+          }),
+        });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || `Gagal (${res.status})`);
+
+      // Gambar sinkron: provider langsung mengembalikan hasil.
+      const immediate = (data.asset_urls as string[] | undefined) ?? (data.asset_url ? [data.asset_url] : []);
+      if (data.status === "completed" && immediate.length) {
+        saveMediaSession({
+          kind: args.kind,
+          prompt: args.sent,
+          style: args.kind === "image" ? args.style : undefined,
+          model: args.model,
+          ratio: args.ratio,
+          count: args.kind === "image" ? args.count : undefined,
+          duration: args.duration,
+          motion: args.motion,
+          quality: args.quality,
+          fps: args.fps,
+          asset_url: immediate[0],
+          asset_urls: immediate.slice(0, slots),
+        });
+        emit(MEDIA_HISTORY_CHANGED);
+        return;
+      }
+
       const genIds: number[] = data.generation_ids ?? (data.generation_id ? [data.generation_id] : []);
       if (!genIds.length) throw new Error("Respons API tanpa generation_id.");
       // ponytail: jumlah maks 2 — poll paralel, gagal satu = tampilkan yg sukses saja.
@@ -96,6 +148,10 @@ export function startMediaJob(args: {
         model: args.model,
         ratio: args.ratio,
         count: args.kind === "image" ? args.count : undefined,
+        duration: args.duration,
+        motion: args.motion,
+        quality: args.quality,
+        fps: args.fps,
         asset_url: urls[0],
         asset_urls: urls,
       });

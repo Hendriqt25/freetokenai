@@ -17,9 +17,20 @@ export class InsufficientTokensError extends Error {
   }
 }
 
-export function insufficient(balance: number) {
+export function insufficient(balance: number, service: "chat" | "image" | "video" | "developer_api" = "chat") {
+  const userMessage = `Saldo Token tidak cukup (sisa ${balance}). Klaim QR dulu.`;
   return NextResponse.json(
-    { error: { code: "INSUFFICIENT_TOKENS", message: `Saldo Token tidak cukup (sisa ${balance}). Klaim QR dulu.` } },
+    {
+      error: { code: "INSUFFICIENT_TOKENS", message: userMessage },
+      gatekeeper: {
+        decision: "BLOCK",
+        service,
+        category: "credit",
+        risk_level: "low",
+        reason: "Saldo workspace tidak mencukupi biaya permintaan.",
+        user_message: userMessage,
+      },
+    },
     { status: 402 },
   );
 }
@@ -181,14 +192,14 @@ export async function workspaceIdForRequest(req: Request): Promise<string | null
 // yang sama dengan chat_messages insert. Saldo tak pernah negatif.
 export interface StreamMeteredResult {
   totalTokens: number;
-  finishReason: "stop" | "token_exhausted" | "error";
+  finishReason: "stop" | "length" | "aborted" | "token_exhausted" | "error";
   reply: string;
 }
 
 export async function withTokensStream(
   workspaceId: string,
   costPer1k: number,
-  streamFn: (onChunk: (text: string, done: boolean, usage?: { promptTokens: number; completionTokens: number; totalTokens: number }) => void, signal: AbortSignal) => Promise<void>,
+  streamFn: (onChunk: (text: string, done: boolean, usage?: { promptTokens: number; completionTokens: number; totalTokens: number }, providerFinish?: string) => void, signal: AbortSignal) => Promise<void>,
   meta: BillingMeta,
   signal: AbortSignal,
 ): Promise<StreamMeteredResult> {
@@ -205,9 +216,11 @@ export async function withTokensStream(
   let finishReason: StreamMeteredResult["finishReason"] = "stop";
 
   await streamFn(
-    (text, done, usage) => {
+    (text, done, usage, providerFinish) => {
       if (done) {
         if (usage) totalTokens = usage.totalTokens;
+        if (providerFinish === "length" || providerFinish === "MAX_TOKENS")
+          finishReason = "length";
       } else {
         reply += text;
         totalTokens += countTokens(text);
@@ -221,6 +234,10 @@ export async function withTokensStream(
     signal,
   ).catch((e) => {
     if (e instanceof Error && e.message === "TOKEN_EXHAUSTED") {
+      return;
+    }
+    if (signal.aborted) {
+      finishReason = "aborted";
       return;
     }
     throw e;

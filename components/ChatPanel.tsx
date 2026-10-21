@@ -1,10 +1,19 @@
 "use client";
 
-import { Wand2 } from "lucide-react";
+import { ArrowDown, FileText, ImageIcon, Play, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useCallback } from "react";
-import { appendChatMessage, CHAT_CHANGED, CHAT_NEW, createChatSession, getChatMessages, hydrateMessages } from "@/lib/chat-history";
-import { CHAT_JOBS_CHANGED, isChatRunning, startChatJob, stopChatJob, subscribeChatJobs } from "@/lib/chat-jobs";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  appendChatMessage,
+  CHAT_CHANGED,
+  CHAT_NEW,
+  createChatSession,
+  getChatMessages,
+  hydrateMessages,
+  loadOlderMessages,
+  type ChatAttachment,
+  type ChatMessage,
+} from "@/lib/chat-history";
 import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
 import { getAppSettings } from "@/lib/settings";
 import { mockWorkspace, suggestionCards } from "@/lib/mock-data";
@@ -16,7 +25,34 @@ type Message = {
   role: "user" | "assistant";
   text: string;
   isError?: boolean;
+  finishReason?: string | null;
+  attachments?: ChatAttachment[];
 };
+
+function toMessage(m: ChatMessage): Message {
+  return {
+    id: m.id,
+    role: m.role,
+    text: m.content,
+    finishReason: m.finish_reason ?? null,
+    attachments: m.attachments,
+  };
+}
+
+function sizeLabel(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function canContinue(message: Message): boolean {
+  return (
+    message.role === "assistant" &&
+    (message.finishReason === "length" ||
+      message.finishReason === "aborted" ||
+      message.finishReason === "token_exhausted")
+  );
+}
 
 // ponytail: markdown-lite tanpa dep baru — cukup bold/italic/code + link, yang lain tampil polos.
 function renderInline(text: string, keyPrefix: string) {
@@ -64,7 +100,13 @@ function splitReferences(text: string): { body: string; refs: string[] } {
   return { body: text.slice(0, m.index).trimEnd(), refs };
 }
 
-function AssistantBubble({ text, isError }: { text: string; isError?: boolean }) {
+const AssistantBubble = memo(function AssistantBubble({
+  text,
+  isError,
+}: {
+  text: string;
+  isError?: boolean;
+}) {
   const { body, refs } = splitReferences(text);
   return (
     <div
@@ -92,7 +134,7 @@ function AssistantBubble({ text, isError }: { text: string; isError?: boolean })
       )}
     </div>
   );
-}
+});
 
 function TypingIndicator() {
   return (
@@ -104,111 +146,207 @@ function TypingIndicator() {
   );
 }
 
-function UserBubble({ text }: { text: string }) {
+const UserBubble = memo(function UserBubble({
+  text,
+  attachments,
+}: {
+  text: string;
+  attachments?: ChatAttachment[];
+}) {
   return (
     <div className="flex justify-end">
       <div className="max-w-[75%] rounded-2xl bg-primary-soft px-4 py-2.5 text-[15px] text-neutral-900 dark:bg-neutral-800 dark:text-white">
-        {text}
+        <div className="whitespace-pre-wrap">{text}</div>
+        {attachments && attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {attachments.map((a) => (
+              <span
+                key={a.id}
+                className="flex max-w-full items-center gap-1.5 rounded-full border border-black/10 bg-white/60 px-2 py-1 text-[11px] dark:border-white/10 dark:bg-neutral-900/60"
+                title={a.filename}
+              >
+                {a.kind === "image" ? <ImageIcon size={12} /> : <FileText size={12} />}
+                <span className="max-w-[10rem] truncate">{a.filename}</span>
+                <span className="shrink-0 opacity-60">{sizeLabel(a.size_bytes)}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
-}
+});
 
-// ponytail: hook streaming chat — handle SSE, incremental render, error/stop.
+type StreamCallbacks = {
+  onDone: (sessionId: string, reply: string, finishReason: string) => void;
+  onError: (err: string) => void;
+  onStop: (partial: string) => void;
+};
+
 function useStreamingChat() {
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const onDoneRef = useRef<((sessionId: string, reply: string) => void) | null>(null);
-  const onErrorRef = useRef<((err: string) => void) | null>(null);
-  const onStopRef = useRef<(() => void) | null>(null);
+  const runningRef = useRef(false);
+  const accumulatedRef = useRef("");
+  const flushTimerRef = useRef<number | null>(null);
 
-  const stop = useCallback(() => {
-    abortRef.current?.abort();
-    onStopRef.current?.();
+  const clearFlushTimer = useCallback(() => {
+    if (flushTimerRef.current !== null) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
   }, []);
 
-  const start = useCallback(async (
-    sessionId: string,
-    message: string,
-    history: { role: string; content: string }[],
-    model: string,
-    onDone: (sessionId: string, reply: string) => void,
-    onError: (err: string) => void,
-    onStop: () => void,
-  ) => {
-    if (isStreaming) return;
-    onDoneRef.current = onDone;
-    onErrorRef.current = onError;
-    onStopRef.current = onStop;
+  const flushNow = useCallback(() => {
+    clearFlushTimer();
+    setStreamingText(accumulatedRef.current);
+  }, [clearFlushTimer]);
 
-    setIsStreaming(true);
-    setStreamingText("");
-    abortRef.current = new AbortController();
+  const pushChunk = useCallback((text: string) => {
+    accumulatedRef.current += text;
+    if (flushTimerRef.current !== null) return;
+    // Batch update ±50ms supaya streaming panjang tidak memicu re-render tiap token.
+    flushTimerRef.current = window.setTimeout(() => {
+      flushTimerRef.current = null;
+      setStreamingText(accumulatedRef.current);
+    }, 50);
+  }, []);
 
-    try {
-      const res = await fetch("/api/chat/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, history, model, session_id: sessionId }),
-        signal: abortRef.current.signal,
-      });
+  const run = useCallback(
+    async (url: string, body: Record<string, unknown>, callbacks: StreamCallbacks) => {
+      if (runningRef.current) return false;
+      runningRef.current = true;
+      accumulatedRef.current = "";
+      setStreamingText("");
+      setIsStreaming(true);
+      abortRef.current = new AbortController();
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
-      }
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: abortRef.current.signal,
+        });
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response body");
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+          throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
+        }
 
-      const decoder = new TextDecoder();
-      let buffer = "";
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No response body");
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6).trim();
-            if (!data) continue;
+        const decoder = new TextDecoder();
+        let buffer = "";
+        const requestSessionId = typeof body.session_id === "string" ? body.session_id : "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.slice(6).trim();
+            if (!raw) continue;
+
+            let parsed: {
+              text?: string;
+              done?: boolean;
+              error?: { message?: string };
+              sessionId?: string;
+              finishReason?: string;
+            };
             try {
-              const parsed = JSON.parse(data);
-              if (parsed.error) {
-                throw new Error(parsed.error.message);
-              }
-              if (parsed.text) {
-                setStreamingText((prev) => prev + parsed.text);
-              }
-              if (parsed.done) {
-                setIsStreaming(false);
-                onDoneRef.current?.(parsed.sessionId ?? sessionId, streamingText + (parsed.text ?? ""));
-                return;
-              }
-            } catch (e) {
-              if (e instanceof Error && e.message.includes("HTTP")) throw e;
+              parsed = JSON.parse(raw);
+            } catch {
+              continue;
+            }
+
+            if (parsed.error) throw new Error(parsed.error.message ?? "Streaming error");
+            if (parsed.text) pushChunk(parsed.text);
+            if (parsed.done) {
+              flushNow();
+              setIsStreaming(false);
+              runningRef.current = false;
+              callbacks.onDone(
+                parsed.sessionId ?? requestSessionId,
+                accumulatedRef.current,
+                parsed.finishReason ?? "stop",
+              );
+              return true;
             }
           }
         }
-      }
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        onStopRef.current?.();
-      } else {
-        onErrorRef.current?.(e instanceof Error ? e.message : "Streaming gagal");
-      }
-      setIsStreaming(false);
-    }
-  }, [isStreaming, streamingText]);
 
-  useEffect(() => {
-    return () => abortRef.current?.abort();
+        flushNow();
+        setIsStreaming(false);
+        runningRef.current = false;
+        callbacks.onDone(requestSessionId, accumulatedRef.current, "stop");
+        return true;
+      } catch (e) {
+        flushNow();
+        setIsStreaming(false);
+        runningRef.current = false;
+        if (e instanceof DOMException && e.name === "AbortError") {
+          callbacks.onStop(accumulatedRef.current);
+        } else if (abortRef.current?.signal.aborted) {
+          callbacks.onStop(accumulatedRef.current);
+        } else {
+          callbacks.onError(e instanceof Error ? e.message : "Streaming gagal");
+        }
+        return false;
+      }
+    },
+    [flushNow, pushChunk],
+  );
+
+  const start = useCallback(
+    (
+      args: {
+        sessionId: string;
+        message: string;
+        history: { role: string; content: string }[];
+        model: string;
+        attachmentIds: string[];
+      },
+      callbacks: StreamCallbacks,
+    ) =>
+      run(
+        "/api/chat/stream",
+        {
+          message: args.message,
+          history: args.history,
+          model: args.model,
+          session_id: args.sessionId,
+          attachment_ids: args.attachmentIds,
+        },
+        callbacks,
+      ),
+    [run],
+  );
+
+  const continueFrom = useCallback(
+    (sessionId: string, model: string, callbacks: StreamCallbacks) =>
+      run("/api/chat/stream", { continue: true, session_id: sessionId, model }, callbacks),
+    [run],
+  );
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
   }, []);
 
-  return { streamingText, isStreaming, start, stop };
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      clearFlushTimer();
+    };
+  }, [clearFlushTimer]);
+
+  return { streamingText, isStreaming, start, continueFrom, stop };
 }
 
 export default function ChatPanel({ sessionId }: { sessionId?: string }) {
@@ -221,37 +359,41 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
       return DEFAULT_CHAT_MODEL;
     }
   });
-  const [streamingReply, setStreamingReply] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [atBottom, setAtBottom] = useState(true);
+  const [newBelow, setNewBelow] = useState(false);
+  const [continuingId, setContinuingId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const assistantMsgIdRef = useRef<string>("");
-  const { streamingText, isStreaming: hookIsStreaming, start, stop } = useStreamingChat();
+  const { streamingText, isStreaming, start, continueFrom, stop } = useStreamingChat();
 
-  function reloadMessages(id: string) {
-    setMessages(
-      getChatMessages(id).map((m) => ({ id: m.id, role: m.role, text: m.content })),
-    );
-    setIsSending(isChatRunning(id));
-  }
+  const reloadMessages = useCallback((id: string) => {
+    setMessages(getChatMessages(id).map(toMessage));
+  }, []);
 
-  // ponytail: buka sesi lama = muat chat_messages-nya dari DB (PRD 7.4).
+  // ponytail: buka sesi lama = muat halaman terakhir dari DB (bukan semua pesan).
   // Job latar yang selesai saat user di page lain ikut masuk via subscription.
   useEffect(() => {
     if (!sessionId) return;
+    setIsSending(false);
     reloadMessages(sessionId);
-    void hydrateMessages(sessionId);
+    let alive = true;
+    void hydrateMessages(sessionId).then((page) => {
+      if (!alive) return;
+      setHasMore(page.hasMore);
+      reloadMessages(sessionId);
+    });
+
     const refresh = () => reloadMessages(sessionId);
-    const unsub = subscribeChatJobs(refresh);
     window.addEventListener(CHAT_CHANGED, refresh);
-    window.addEventListener(CHAT_JOBS_CHANGED, refresh);
     return () => {
-      unsub();
+      alive = false;
       window.removeEventListener(CHAT_CHANGED, refresh);
-      window.removeEventListener(CHAT_JOBS_CHANGED, refresh);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, reloadMessages]);
 
   // ponytail: Obrolan Baru saat sudah di /dashboard = reset draft.
   useEffect(() => {
@@ -262,22 +404,52 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
   }, [sessionId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isSending, streamingReply]);
+    if (!atBottom) {
+      if (isStreaming) setNewBelow(true);
+      return;
+    }
+    bottomRef.current?.scrollIntoView({ behavior: isStreaming ? "auto" : "smooth" });
+  }, [messages, streamingText, isStreaming, atBottom]);
 
-  // ponytail: klik kotak saat loading = stop job yang jalan (di module, bukan ref).
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const bottom = distance < 80;
+    setAtBottom(bottom);
+    if (bottom) setNewBelow(false);
+  }
+
+  function scrollToBottom() {
+    setAtBottom(true);
+    setNewBelow(false);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  async function loadOlder() {
+    if (!sessionId || loadingOlder || !hasMore || !messages.length) return;
+    setLoadingOlder(true);
+    const el = scrollRef.current;
+    const prevHeight = el?.scrollHeight ?? 0;
+    const prevTop = el?.scrollTop ?? 0;
+    const result = await loadOlderMessages(sessionId, messages[0].id);
+    setHasMore(result.hasMore);
+    reloadMessages(sessionId);
+    requestAnimationFrame(() => {
+      if (el) el.scrollTop = el.scrollHeight - prevHeight + prevTop;
+    });
+    setLoadingOlder(false);
+  }
+
   function handleStop() {
-    if (sessionId) stopChatJob(sessionId);
     stop();
   }
 
-  async function handleSend(text: string) {
+  async function handleSend(text: string, attachments: ChatAttachment[]): Promise<boolean> {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    if (sessionId && isChatRunning(sessionId)) return;
-    // ponytail: request dilempar ke job module-scope — pindah page tidak membatalkan.
-    // Chat baru: sesi dibuat dulu lalu langsung pindah halaman; balasan menyusul
-    // via storage + subscription (tak perlu tunggu fetch selesai seperti dulu).
+    if (!trimmed || isSending) return false;
+
+    // Jangan navigasi sebelum stream selesai: unmount akan membatalkan fetch.
     let id = sessionId;
     let isNew = false;
     if (!id) {
@@ -286,61 +458,128 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
       isNew = true;
     }
     const target = id;
-    const userMsg = { id: crypto.randomUUID(), role: "user" as const, text: trimmed };
+    const userMsg: Message = { id: crypto.randomUUID(), role: "user", text: trimmed, attachments };
+    const historyForApi = [...messages, userMsg]
+      .slice(-21, -1)
+      .map((m) => ({ role: m.role, content: m.text }));
+
     setMessages((prev) => [...prev, userMsg]);
+    setAtBottom(true);
+    setNewBelow(false);
+    setIsSending(true);
+    setContinuingId(null);
     appendChatMessage(target, "user", trimmed);
 
-    // ponytail: streaming path — show incremental, then hydrate from DB on done.
     assistantMsgIdRef.current = crypto.randomUUID();
-    setStreamingReply("");
-    setIsStreaming(true);
-    setIsSending(true);
-
-    const historyForApi = [...messages, userMsg].slice(-21, -1).map((m) => ({ role: m.role, content: m.text }));
-
-    start(
-      target,
-      trimmed,
-      historyForApi,
-      model,
-      (finalSessionId, reply) => {
-        setIsStreaming(false);
-        setIsSending(false);
-        // Replace streaming placeholder with final message
-        setMessages((prev) =>
-          prev.map((m) => (m.id === assistantMsgIdRef.current ? { ...m, text: reply } : m))
-        );
-        // Hydrate from DB to get usage_log_id linkage
-        void hydrateMessages(finalSessionId);
-        if (isNew) router.replace(`/dashboard/chat/${finalSessionId}`);
-      },
-      (err) => {
-        setIsStreaming(false);
-        setIsSending(false);
-        const errMsg = `Maaf, ${err}`;
-        setMessages((prev) =>
-          prev.map((m) => (m.id === assistantMsgIdRef.current ? { ...m, text: errMsg, isError: true } : m))
-        );
-      },
-      () => {
-        setIsStreaming(false);
-        setIsSending(false);
-        setMessages((prev) =>
-          prev.map((m) => (m.id === assistantMsgIdRef.current ? { ...m, text: "Dihentikan." } : m))
-        );
-      }
-    );
-
-    // Add streaming placeholder
     setMessages((prev) => [...prev, { id: assistantMsgIdRef.current, role: "assistant", text: "" }]);
 
-    if (isNew) router.replace(`/dashboard/chat/${target}`);
+    void start(
+      {
+        sessionId: target,
+        message: trimmed,
+        history: historyForApi,
+        model,
+        attachmentIds: attachments.map((a) => a.id),
+      },
+      {
+        onDone: (finalSessionId, reply, finishReason) => {
+          setIsSending(false);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgIdRef.current ? { ...m, text: reply, finishReason } : m,
+            ),
+          );
+          void hydrateMessages(finalSessionId).then((page) => {
+            setHasMore(page.hasMore);
+            reloadMessages(finalSessionId);
+          });
+          if (isNew) router.replace(`/dashboard/chat/${finalSessionId}`);
+        },
+        onError: (err) => {
+          setIsSending(false);
+          const errMsg = `Maaf, ${err}`;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgIdRef.current
+                ? { ...m, text: errMsg, isError: true, finishReason: "error" }
+                : m,
+            ),
+          );
+          if (isNew) router.replace(`/dashboard/chat/${target}`);
+        },
+        onStop: (partial) => {
+          setIsSending(false);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgIdRef.current
+                ? { ...m, text: partial || "Dihentikan.", finishReason: "aborted" }
+                : m,
+            ),
+          );
+          if (isNew) router.replace(`/dashboard/chat/${target}`);
+        },
+      },
+    ).then((ok) => {
+      if (!ok) setIsSending(false);
+    });
+
+    return true;
+  }
+
+  async function handleContinue() {
+    const last = messages[messages.length - 1];
+    if (!sessionId || isSending || !last || !canContinue(last)) return;
+
+    setContinuingId(last.id);
+    setIsSending(true);
+    setAtBottom(true);
+    setNewBelow(false);
+
+    await continueFrom(sessionId, model, {
+      onDone: (_sessionId, reply, finishReason) => {
+        setIsSending(false);
+        setContinuingId(null);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === last.id ? { ...m, text: m.text + reply, finishReason } : m,
+          ),
+        );
+        void hydrateMessages(sessionId).then((page) => {
+          setHasMore(page.hasMore);
+          reloadMessages(sessionId);
+        });
+      },
+      onError: (err) => {
+        setIsSending(false);
+        setContinuingId(null);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `Maaf, ${err}`,
+            isError: true,
+            finishReason: "error",
+          },
+        ]);
+      },
+      onStop: (partial) => {
+        setIsSending(false);
+        setContinuingId(null);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === last.id
+              ? { ...m, text: m.text + (partial || "Dihentikan."), finishReason: "aborted" }
+              : m,
+          ),
+        );
+      },
+    });
   }
 
   if (messages.length === 0) {
     return (
       <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-4 pt-6 pb-4 md:px-6 md:pt-10 lg:pt-12 lg:pb-8">
-        {/* Badge + headline tetap di area tengah-atas */}
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
           <span className="flex items-center gap-2 rounded-full border border-neutral-200 px-4 py-1.5 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
             <Wand2 size={14} className="text-primary" />
@@ -352,16 +591,20 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
           </h1>
         </div>
 
-        {/* Kartu shortcut + chat input + disclaimer nempel di paling bawah */}
         <div className="flex flex-col gap-3 lg:gap-4">
-          {/* ponytail: grid 3 kolom di semua ukuran — ikut mengecil, tanpa geser. */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
             {suggestionCards.map((card) => (
               <SuggestionCard key={card.title} {...card} />
             ))}
           </div>
 
-          <ChatInput onSend={handleSend} onStop={handleStop} isSending={isSending || isStreaming} model={model} onModelChange={setModel} />
+          <ChatInput
+            onSend={handleSend}
+            onStop={handleStop}
+            isSending={isSending || isStreaming}
+            model={model}
+            onModelChange={setModel}
+          />
         </div>
       </div>
     );
@@ -369,25 +612,83 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="no-scrollbar flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
-          {messages.map((message) =>
-            message.role === "user" ? (
-              <UserBubble key={message.id} text={message.text} />
-            ) : (
-              <AssistantBubble key={message.id} text={message.text} isError={message.isError} />
-            ),
-          )}
-          {isStreaming && (
-            <AssistantBubble key={assistantMsgIdRef.current} text={streamingText} />
-          )}
-          {!isStreaming && isSending && <TypingIndicator />}
-          <div ref={bottomRef} />
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="no-scrollbar h-full overflow-y-auto"
+        >
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
+            {hasMore && (
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => void loadOlder()}
+                  disabled={loadingOlder}
+                  className="rounded-full border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                  {loadingOlder ? "Memuat…" : "Muat pesan sebelumnya"}
+                </button>
+              </div>
+            )}
+
+            {messages.map((message, index) => {
+              const isLast = index === messages.length - 1;
+              if (message.role === "user")
+                return <UserBubble key={message.id} text={message.text} attachments={message.attachments} />;
+
+              const live =
+                continuingId === message.id ||
+                (isStreaming && message.id === assistantMsgIdRef.current);
+              const displayText = message.text + (live ? streamingText : "");
+
+              return (
+                <div key={message.id}>
+                  <AssistantBubble text={displayText} isError={message.isError} />
+                  {message.finishReason === "aborted" && !isSending && (
+                    <p className="mt-1.5 text-[11px] text-neutral-400">Dihentikan</p>
+                  )}
+                  {isLast && !isSending && canContinue(message) && (
+                    <button
+                      type="button"
+                      onClick={() => void handleContinue()}
+                      className="mt-2 flex items-center gap-1.5 rounded-full border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                    >
+                      <Play size={12} />
+                      Lanjutkan
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {isSending && !streamingText && <TypingIndicator />}
+            <div ref={bottomRef} />
+          </div>
         </div>
+
+        {!atBottom && (
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            aria-label="Scroll ke bawah"
+            className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 shadow-md transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+          >
+            <ArrowDown size={14} />
+            {newBelow ? "Pesan baru" : "Ke bawah"}
+          </button>
+        )}
       </div>
 
       <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6 md:pb-6">
-        <ChatInput onSend={handleSend} onStop={handleStop} isSending={isSending || isStreaming} model={model} onModelChange={setModel} compact />
+        <ChatInput
+          onSend={handleSend}
+          onStop={handleStop}
+          isSending={isSending || isStreaming}
+          model={model}
+          onModelChange={setModel}
+          compact
+        />
       </div>
     </div>
   );

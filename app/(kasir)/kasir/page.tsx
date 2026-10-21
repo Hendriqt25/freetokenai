@@ -162,8 +162,8 @@ export default function KasirPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-neutral-50 dark:bg-neutral-950">
-      <div className="mx-auto max-w-md px-4 py-6 print:max-w-none">
+    <div className="flex min-h-dvh items-center justify-center bg-neutral-50 dark:bg-neutral-950 print:block">
+      <div className="w-full max-w-md px-4 py-6 print:max-w-none">
         <div className="flex items-center justify-between print:hidden">
           <div>
             <h1 className="text-xl font-bold">Kasir — Struk Token</h1>

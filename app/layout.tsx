@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -25,11 +24,18 @@ export default function RootLayout({
     // (lihat next-themes docs untuk pola yang sama).
     <html lang="id" className={dmSans.variable} suppressHydrationWarning>
       <head>
-        <Script
+        {/* ponytail: inline script biasa (bukan next/script) — dieksekusi sinkron
+            saat parse HTML, sebelum paint pertama, sehingga tema gelap sudah
+            terpasang sebelum React hydrate (lihat next/docs "Preventing Flash").
+            next/script beforeInteractive di dalam <head> justru memicu warning
+            React "Encountered a script tag while rendering React component". */}
+        <script
           id="theme-init"
-          strategy="beforeInteractive"
           // Set the theme class before paint to avoid a light/dark flash.
-        >{`try{if(localStorage.getItem('theme')==='dark'||(!('theme' in localStorage)&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`}</Script>
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem('theme')==='dark'||(!('theme' in localStorage)&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`,
+          }}
+        />
       </head>
       <body className="font-sans antialiased">{children}</body>
     </html>

@@ -15,6 +15,11 @@ export type MediaSession = {
   asset_url: string;
   asset_urls?: string[];
   created_at: string;
+  // Video-specific fields (from DB migration 0010)
+  reference_image_url?: string | null;
+  duration?: number;
+  motion?: string;
+  fps?: number;
 };
 
 const key = (kind: "image" | "video") => `ftai:media:${currentUserId()}:${kind}`;

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Building2, Loader2 } from 'lucide-react';
 
 // ponytail: login cookie web /admin — verifikasi password super_admin, route
-// cookie-login set ftai_session; redirect ke /admin setelah sukses.
+// cookie-login set ftai_admin_session (terpisah dari customer); redirect ke /admin.
 export default function AdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');

@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { clearedSessionCookie, createSession, devSeedUserId, requireAuth, sessionCookieHeader } from "@/lib/auth";
 
 // ponytail: dev auto-login via seed user TASK-001; klaim QR (/claim) ditunda.
+// Hanya sesi customer yang dipakai dashboard. Kalau cookie customer berisi sesi
+// admin lama, di dev diganti sesi dev; di production dianggap belum login.
 export async function GET(req: Request) {
   const auth = await requireAuth(req);
-  if (auth) return NextResponse.json({ user: auth.user });
+  if (auth && auth.user.role === "customer") return NextResponse.json({ user: auth.user });
 
   // ponytail: dev auto-login hanya non-production; di production anon = 401.
   if (process.env.NODE_ENV === "production")

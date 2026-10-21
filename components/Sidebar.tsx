@@ -19,7 +19,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CHAT_CHANGED, CHAT_NEW, deleteChatSession, hydrateSessions, listChatSessions, type ChatSession } from "@/lib/chat-history";
 import { CHAT_JOBS_CHANGED } from "@/lib/chat-jobs";
-import { fetchProfile, getProfile, SETTINGS_CHANGED, type UserProfile } from "@/lib/settings";
+import { DEFAULT_PROFILE, fetchProfile, getProfile, SETTINGS_CHANGED, type UserProfile } from "@/lib/settings";
 
 const navItems = [
   { label: "Bikin Gambar", icon: ImageIcon, href: "/dashboard/image" },
@@ -27,11 +27,15 @@ const navItems = [
   { label: "Developer API", icon: Code2, href: "/dashboard/developer" },
 ];
 
+
 export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const [historyOpen, setHistoryOpen] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [profile, setProfile] = useState<UserProfile>(() => getProfile());
+  // ponytail: initial state WAJIB sama persis dengan output SSR (mockUser),
+  // bukan hasil localStorage — kalau beda, hydration gagal ("SA" vs "TR").
+  // Nilai asli dipasang di useEffect sync() di bawah, setelah hydrate.
+  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const router = useRouter();
   const pathname = usePathname();
 

@@ -1,10 +1,10 @@
 import DashboardShell from "@/components/DashboardShell";
-import MediaStudio from "@/components/MediaStudio";
+import VideoGenerator from "@/components/VideoGenerator";
 
 export default function VideoPage() {
   return (
     <DashboardShell>
-      <MediaStudio kind="video" />
+      <VideoGenerator />
     </DashboardShell>
   );
 }

@@ -1,8 +1,62 @@
 "use client";
 
-import { ChevronDown, ImageIcon, Paperclip, Plus, Send, Square, VideoIcon } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  ChevronDown,
+  FileText,
+  ImageIcon,
+  Loader2,
+  Paperclip,
+  Plus,
+  Send,
+  Square,
+  VideoIcon,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CHAT_MODELS, DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
+import type { ChatAttachment } from "@/lib/chat-history";
+import { fetchCatalogModels, type CatalogModel } from "@/lib/model-catalog";
+
+type DraftAttachment = {
+  key: string;
+  id?: string;
+  filename: string;
+  size: number;
+  kind: "document" | "image";
+  status: "uploading" | "ready" | "error";
+  error?: string;
+  previewUrl?: string;
+};
+
+type UploadResponse = {
+  attachments?: {
+    id: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+    kind: "document" | "image";
+    char_count: number;
+  }[];
+  error?: { message?: string };
+};
+
+const MAX_FILES = 5;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const ACCEPT_FILES =
+  ".pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,.htm,.xml,.log,.yml,.yaml,image/png,image/jpeg,image/webp";
+
+function isImageName(name: string): boolean {
+  return /\.(png|jpe?g|webp)$/i.test(name);
+}
+
+function sizeLabel(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 const ATTACH_OPTIONS = [
   {
@@ -34,7 +88,7 @@ export default function ChatInput({
   autoFocus,
   compact,
 }: {
-  onSend?: (text: string) => void;
+  onSend?: (text: string, attachments: ChatAttachment[]) => Promise<boolean> | boolean | void;
   onStop?: () => void;
   isSending?: boolean;
   model?: string;
@@ -45,9 +99,16 @@ export default function ChatInput({
 }) {
   const [value, setValue] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
+  const [attachError, setAttachError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  // picker model chat dari katalog /admin (fallback CHAT_MODELS lama bila API mati)
+  const [catalog, setCatalog] = useState<CatalogModel[]>(CHAT_MODELS.map((m) => ({ ...m, cost: 1 })));
+  useEffect(() => {
+    void fetchCatalogModels("chat").then(setCatalog);
+  }, []);
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const mobilePhotoInputRef = useRef<HTMLInputElement>(null);
   const compactTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const COMPACT_MIN_HEIGHT = 36; // = h-9, sejajar tombol +/kirim
@@ -93,17 +154,115 @@ export default function ChatInput({
     // (Section 4.3 PRD), belum ada logic nyata di tahap UI slicing ini.
   }
 
-  function handleSend() {
+  function patchAttachment(key: string, patch: Partial<DraftAttachment>) {
+    setAttachments((prev) => prev.map((a) => (a.key === key ? { ...a, ...patch } : a)));
+  }
+
+  async function uploadOne(draft: DraftAttachment, file: File) {
+    const form = new FormData();
+    form.append("files", file);
+    try {
+      const res = await fetch("/api/v1/chat/attachments", { method: "POST", body: form });
+      const data = (await res.json().catch(() => ({}))) as UploadResponse;
+      if (!res.ok) throw new Error(data.error?.message ?? `Upload gagal (HTTP ${res.status})`);
+      const uploaded = data.attachments?.[0];
+      if (!uploaded) throw new Error("Server tidak mengembalikan data lampiran.");
+      patchAttachment(draft.key, {
+        id: uploaded.id,
+        filename: uploaded.filename,
+        size: uploaded.size_bytes,
+        kind: uploaded.kind,
+        status: "ready",
+      });
+    } catch (e) {
+      patchAttachment(draft.key, {
+        status: "error",
+        error: e instanceof Error ? e.message : "Upload gagal.",
+      });
+    }
+  }
+
+  function addFiles(fileList: FileList | File[]) {
+    setAttachError("");
+    const incoming = Array.from(fileList);
+    const room = MAX_FILES - attachments.length;
+    if (room <= 0) {
+      setAttachError(`Maksimal ${MAX_FILES} file per pesan.`);
+      return;
+    }
+
+    const accepted: { draft: DraftAttachment; file: File }[] = [];
+    for (const file of incoming.slice(0, room)) {
+      const image = isImageName(file.name) || file.type.startsWith("image/");
+      const limit = image ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
+      if (file.size > limit) {
+        setAttachError(`"${file.name}" melebihi batas ${sizeLabel(limit)}.`);
+        continue;
+      }
+      accepted.push({
+        file,
+        draft: {
+          key: crypto.randomUUID(),
+          filename: file.name,
+          size: file.size,
+          kind: image ? "image" : "document",
+          status: "uploading",
+          previewUrl: image ? URL.createObjectURL(file) : undefined,
+        },
+      });
+    }
+
+    if (incoming.length > room) setAttachError(`Hanya ${room} file lagi yang bisa ditambahkan.`);
+    if (!accepted.length) return;
+
+    setAttachments((prev) => [...prev, ...accepted.map((a) => a.draft)]);
+    for (const { draft, file } of accepted) void uploadOne(draft, file);
+  }
+
+  function removeAttachment(key: string) {
+    const target = attachments.find((a) => a.key === key);
+    if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+    if (target?.id)
+      void fetch(`/api/v1/chat/attachments/${target.id}`, { method: "DELETE" }).catch(() => undefined);
+    setAttachments((prev) => prev.filter((a) => a.key !== key));
+  }
+
+  function clearAttachments() {
+    for (const a of attachments) if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+    setAttachments([]);
+    setAttachError("");
+  }
+
+  async function handleSend() {
     const trimmed = value.trim();
-    if (!trimmed) return;
-    onSend?.(trimmed);
-    setValue("");
+    const uploading = attachments.some((a) => a.status === "uploading");
+    if (!trimmed || uploading || isSending || submitting) return;
+
+    const ready = attachments
+      .filter((a) => a.status === "ready" && a.id)
+      .map((a) => ({
+        id: a.id as string,
+        filename: a.filename,
+        mime_type: "",
+        size_bytes: a.size,
+        kind: a.kind,
+        char_count: 0,
+      }));
+    setSubmitting(true);
+    try {
+      const accepted = await onSend?.(trimmed, ready);
+      if (accepted === false) return;
+      setValue("");
+      clearAttachments();
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      handleSend();
+      void handleSend();
     }
   }
 
@@ -159,12 +318,53 @@ export default function ChatInput({
   const mobileAttachButton = (
     <button
       type="button"
-      onClick={() => mobilePhotoInputRef.current?.click()}
-      aria-label="Upload foto"
+      onClick={() => fileInputRef.current?.click()}
+      aria-label="Upload file"
       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 sm:hidden"
     >
       <Plus size={18} />
     </button>
+  );
+
+  const attachmentsBar = (
+    <div className="flex w-full flex-col gap-1.5">
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {attachments.map((a) => (
+            <span
+              key={a.key}
+              className={`flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-xs ${
+                a.status === "error"
+                  ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                  : "border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+              }`}
+              title={a.error}
+            >
+              {a.kind === "image" && a.previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.previewUrl} alt="" className="h-5 w-5 rounded object-cover" />
+              ) : (
+                <FileText size={13} className="shrink-0" />
+              )}
+              <span className="max-w-[9rem] truncate">{a.filename}</span>
+              <span className="shrink-0 text-[10px] text-neutral-400">{sizeLabel(a.size)}</span>
+              {a.status === "uploading" && <Loader2 size={12} className="shrink-0 animate-spin" />}
+              {a.status === "ready" && <Check size={12} className="shrink-0 text-green-600 dark:text-green-400" />}
+              {a.status === "error" && <AlertCircle size={12} className="shrink-0" />}
+              <button
+                type="button"
+                onClick={() => removeAttachment(a.key)}
+                aria-label={`Hapus ${a.filename}`}
+                className="shrink-0 rounded-full p-0.5 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {attachError && <p className="text-xs text-red-600 dark:text-red-400">{attachError}</p>}
+    </div>
   );
 
   // ponytail: saat loading tombol kirim jadi kotak stop — klik = pause request.
@@ -180,8 +380,12 @@ export default function ChatInput({
   ) : (
     <button
       type="button"
-      onClick={handleSend}
-      disabled={value.trim().length === 0}
+      onClick={() => void handleSend()}
+      disabled={
+        value.trim().length === 0 ||
+        submitting ||
+        attachments.some((a) => a.status === "uploading")
+      }
       aria-label="Kirim pesan"
       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
     >
@@ -198,8 +402,8 @@ export default function ChatInput({
         aria-label="Pilih model"
         className="h-9 max-w-[6.5rem] cursor-pointer appearance-none truncate rounded-full border border-neutral-200 bg-transparent pl-3 pr-7 text-xs text-neutral-600 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 sm:max-w-[8.5rem] dark:border-neutral-700 dark:text-neutral-300"
       >
-        {CHAT_MODELS.map((m) => (
-          <option key={m.id} value={m.id}>
+        {catalog.map((m) => (
+          <option key={`${m.provider ?? "model"}-${m.id}`} value={m.id}>
             {m.label}
           </option>
         ))}
@@ -212,17 +416,23 @@ export default function ChatInput({
   );
 
   const hiddenFileInputs = (
-    <>
-      {/* Desktop: file umum (dokumen/PDF/gambar/video) lewat opsi "Upload File" di menu. */}
-      <input ref={fileInputRef} type="file" multiple className="hidden" />
-      {/* Mobile: langsung foto/galeri, tanpa menu perantara. */}
-      <input ref={mobilePhotoInputRef} type="file" accept="image/*" className="hidden" />
-    </>
+    <input
+      ref={fileInputRef}
+      type="file"
+      multiple
+      accept={ACCEPT_FILES}
+      className="hidden"
+      onChange={(e) => {
+        if (e.target.files) addFiles(e.target.files);
+        e.target.value = "";
+      }}
+    />
   );
 
   if (compact) {
     return (
       <div className="w-full">
+        {(attachments.length > 0 || attachError) && <div className="mb-2">{attachmentsBar}</div>}
         <div className="flex w-full items-end gap-1.5 rounded-3xl border border-neutral-200 bg-white py-1.5 pl-1.5 pr-1.5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
           {attachMenu}
           {mobileAttachButton}
@@ -256,6 +466,7 @@ export default function ChatInput({
   return (
     <div className="w-full">
       <div className="flex flex-col gap-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        {attachmentsBar}
         <textarea
           value={value}
           onChange={(event) => setValue(event.target.value)}

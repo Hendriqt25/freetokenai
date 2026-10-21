@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { corsHeaders, createSession, loginByPassword, requireAllowedOrigin, sessionCookieHeader } from "@/lib/auth";
+import { adminSessionCookieHeader, corsHeaders, createSession, loginByPassword, requireAllowedOrigin } from "@/lib/auth";
 import { rateLimited, retryAfterSec } from "@/lib/rate-limit";
 
 // ponytail: login web /admin — verifikasi password admin (loginByPassword),
-// khusus super_admin, lalu set cookie ftai_session (dibaca getServerSession di
-// layout (console)). Bearer JWT untuk API lintas origin tetap lewat /auth/login
-// (admin_sessions). Cookie SameSite=Lax hanya berguna di origin yang sama.
+// khusus super_admin, lalu set cookie ftai_admin_session (TERPISAH dari
+// ftai_session milik customer). Layout (console) membaca getAdminServerSession.
+// Bearer JWT untuk API lintas origin tetap lewat /auth/login (admin_sessions).
 export async function POST(req: Request) {
   const origin = requireAllowedOrigin(req);
   if (origin === "denied")
@@ -56,6 +56,6 @@ export async function POST(req: Request) {
     { user: { id: login.user.id, role: login.user.role } },
     { status: 200, headers: corsHeaders(origin) },
   );
-  res.headers.set("Set-Cookie", sessionCookieHeader(session.id));
+  res.headers.set("Set-Cookie", adminSessionCookieHeader(session.id));
   return res;
 }

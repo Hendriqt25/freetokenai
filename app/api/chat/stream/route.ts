@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
-import { DEFAULT_CHAT_MODEL, isGroqModel, isKnownChatModel } from "@/lib/chat-models";
+import { resolveRoute, streamChat, supportsVision, type AiRoute, type StreamUsage } from "@/lib/ai-router";
+import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
+import { buildChatContext, loadSessionAttachments } from "@/lib/chat-context";
+import {
+  ChatTurnError,
+  finishAssistantTurn,
+  loadHistoryBefore,
+  loadLastAssistant,
+  startChatTurn,
+  type FinishReason,
+  type StartedTurn,
+} from "@/lib/chat-turn";
+import { isModelAllowed, modelCost } from "@/lib/model-registry";
 import { sql } from "@/lib/db";
-import { fetchRetryOnce } from "@/lib/obs";
+import { evaluateAiRequest, gatekeeperAccessResponse, gatekeeperBlockResponse } from "@/lib/gatekeeper";
 import {
   chatCost,
   InsufficientTokensError,
-  insufficient,
   withTokensStream,
   workspaceIdForRequest,
 } from "@/lib/billing";
@@ -16,201 +27,42 @@ const SYSTEM_ID =
   "Untuk jawaban yang bersifat faktual (bukan opini atau kreatif murni), akhiri dengan blok 'Referensi:' berisi 1-3 sumber relevan " +
   "(nama sumber — URL bila tahu, satu per baris). Tanpa jawaban faktual = tanpa blok referensi.";
 
+const CONTINUE_PROMPT =
+  "Lanjutkan jawaban sebelumnya TEPAT dari bagian terakhir. " +
+  "Jangan mengulang kalimat yang sudah ada, jangan memberi pembuka baru. " +
+  "Mulai langsung dengan kelanjutannya.";
+
 type HistItem = { role?: unknown; content?: unknown };
 
-async function streamGroq(
-  model: string,
-  message: string,
-  history: HistItem[],
-  onChunk: (text: string, done: boolean, usage?: { promptTokens: number; completionTokens: number; totalTokens: number }) => void,
-  signal: AbortSignal,
-) {
-  const key = process.env.GROQ_API_KEY;
-  if (!key)
-    throw new Error("GROQ_API_KEY belum diset di .env.local");
+type Body = {
+  message?: unknown;
+  history?: HistItem[];
+  model?: unknown;
+  session_id?: unknown;
+  attachment_ids?: unknown;
+  continue?: unknown;
+};
 
-  const res = await fetchRetryOnce("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: SYSTEM_ID },
-        ...history.slice(-20).map((m) => ({
-          role: m.role === "assistant" ? "assistant" : "user",
-          content: String(m.content ?? "").slice(0, 8000),
-        })),
-        { role: "user", content: message },
-      ],
-      stream: true,
-    }),
-    signal,
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error?.message ?? "Groq error");
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error("No response body");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) onChunk(content, false);
-          if (parsed.usage) {
-            usage = {
-              promptTokens: parsed.usage.prompt_tokens ?? 0,
-              completionTokens: parsed.usage.completion_tokens ?? 0,
-              totalTokens: parsed.usage.total_tokens ?? 0,
-            };
-          }
-        } catch {
-        }
-      }
-    }
-  }
-  onChunk("", true, usage);
+function normalizeFinish(reason: string): FinishReason {
+  if (reason === "stop" || reason === "length" || reason === "aborted" || reason === "token_exhausted")
+    return reason;
+  return "error";
 }
 
-async function streamGemini(
-  model: string,
-  key: string,
-  message: string,
-  history: HistItem[],
-  onChunk: (text: string, done: boolean, usage?: { promptTokens: number; completionTokens: number; totalTokens: number }) => void,
-  signal: AbortSignal,
-) {
-  const contents = [
-    ...history.slice(-20).map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: String(m.content ?? "").slice(0, 8000) }],
-    })),
-    { role: "user", parts: [{ text: message }] },
-  ];
-
-  const res = await fetchRetryOnce(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        contents,
-        systemInstruction: { parts: [{ text: SYSTEM_ID }] },
-      }),
-      signal,
-      cache: "no-store",
-    },
-  );
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error?.message ?? "Gemini error");
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error("No response body");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = line.slice(6).trim();
-        if (!data || data === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(data);
-          const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) onChunk(text, false);
-          if (parsed.usageMetadata) {
-            usage = {
-              promptTokens: parsed.usageMetadata.promptTokenCount ?? 0,
-              completionTokens: parsed.usageMetadata.candidatesTokenCount ?? 0,
-              totalTokens: parsed.usageMetadata.totalTokenCount ?? 0,
-            };
-          }
-        } catch {
-        }
-      }
-    }
-  }
-  onChunk("", true, usage);
-}
-
-async function runStreamingProvider(
-  model: string,
-  message: string,
-  history: HistItem[],
-  onChunk: (text: string, done: boolean, usage?: { promptTokens: number; completionTokens: number; totalTokens: number }) => void,
-  signal: AbortSignal,
-) {
-  if (isGroqModel(model)) {
-    await streamGroq(model, message, history, onChunk, signal);
-  } else {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) throw new Error("GEMINI_API_KEY belum diset di .env.local");
-    await streamGemini(model, key, message, history, onChunk, signal);
-  }
-}
-
-async function saveChatTurn(
-  wsId: string,
-  sessionId: string,
-  userText: string,
-  reply: string,
-  usageId: string | undefined,
-): Promise<string> {
-  const title = userText.slice(0, 60) || "Obrolan Baru";
-  return (await sql.begin(async (tx: any) => {
-    let sid = sessionId;
-    if (sid) {
-      const ok = (await tx`
-        SELECT 1 FROM chat_sessions WHERE id = ${sid} AND workspace_id = ${wsId} LIMIT 1`) as unknown as unknown[];
-      if (!ok[0]) sid = "";
-    }
-    if (!sid) {
-      const created = (await tx`
-        INSERT INTO chat_sessions (workspace_id, title) VALUES (${wsId}, ${title})
-        RETURNING id`) as unknown as { id: string }[];
-      sid = created[0].id;
-    }
-    await tx`INSERT INTO chat_messages (session_id, role, content) VALUES (${sid}, 'user', ${userText})`;
-    await tx`
-      INSERT INTO chat_messages (session_id, role, content, usage_log_id)
-      VALUES (${sid}, 'assistant', ${reply}, ${usageId ?? null})`;
-    await tx`
-      UPDATE chat_sessions SET updated_at = now(),
-        title = CASE WHEN title = 'Obrolan Baru' THEN ${title} ELSE title END
-      WHERE id = ${sid}`;
-    return sid;
-  })) as unknown as string;
+async function hasImageAttachments(wsId: string, attachmentIds: string[]): Promise<boolean> {
+  if (!attachmentIds.length) return false;
+  const rows = (await sql`
+    SELECT 1 FROM chat_attachments
+    WHERE id = ANY(${attachmentIds})
+      AND workspace_id = ${wsId}
+      AND message_id IS NULL
+      AND kind = 'image'
+    LIMIT 1`) as unknown as unknown[];
+  return Boolean(rows[0]);
 }
 
 export async function POST(req: Request) {
-  let body: { message?: unknown; history?: HistItem[]; model?: unknown; session_id?: unknown };
+  let body: Body;
   try {
     body = await req.json();
   } catch {
@@ -219,72 +71,263 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const message = String(body.message ?? "").trim().slice(0, 8000);
-  if (!message)
+
+  const isContinue = body.continue === true;
+  const message = String(body.message ?? "").trim().slice(0, 16_000);
+  if (!isContinue && !message)
     return NextResponse.json(
       { error: { code: "INVALID_PROMPT", message: "Pesan tidak boleh kosong." } },
       { status: 400 },
     );
+
+  if (!isContinue) {
+    const gateInput = [
+      message,
+      ...(Array.isArray(body.history)
+        ? body.history
+            .filter((item) => item.role !== "assistant")
+            .slice(-20)
+            .map((item) => String(item.content ?? "").slice(0, 8000))
+        : []),
+    ].join("\n");
+    const gate = gatekeeperBlockResponse(evaluateAiRequest(gateInput, "chat"));
+    if (gate) return gate;
+  }
+
   const model = String(body.model ?? GEMINI_DEFAULT).slice(0, 80);
-  if (!isKnownChatModel(model))
+  const route = await resolveRoute(model, "chat");
+  if (!route) {
+    if (await isModelAllowed("chat", model))
+      return NextResponse.json(
+        { error: { code: "NO_API_KEY", message: "API key provider belum diisi admin. Hubungi super_admin." } },
+        { status: 500 },
+      );
     return NextResponse.json(
-      { error: { code: "INVALID_MODEL", message: "Model tidak dikenal." } },
+      { error: { code: "INVALID_MODEL", message: "Model tidak dikenal / tidak aktif di katalog." } },
       { status: 400 },
     );
+  }
+
   const history = Array.isArray(body.history) ? body.history : [];
   const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 64) : "";
+  const attachmentIds = Array.isArray(body.attachment_ids)
+    ? body.attachment_ids
+        .filter((id): id is string => typeof id === "string")
+        .map((id) => id.slice(0, 64))
+        .slice(0, 5)
+    : [];
+
   const wsId = await workspaceIdForRequest(req);
-  if (!wsId) {
-    if (process.env.NODE_ENV === "production")
+  if (!wsId && process.env.NODE_ENV === "production")
+    return gatekeeperAccessResponse("chat", "Belum login.");
+  if (isContinue && (!wsId || !sessionId))
+    return NextResponse.json(
+      { error: { code: "INVALID_SESSION", message: "Sesi tidak valid untuk melanjutkan." } },
+      { status: 400 },
+    );
+
+  let lastAssistant: Awaited<ReturnType<typeof loadLastAssistant>> = null;
+  let appendToMessageId: string | undefined;
+  let historyForApi: HistItem[] = history;
+  let providerMessage = message;
+
+  if (isContinue && wsId) {
+    lastAssistant = await loadLastAssistant(wsId, sessionId);
+    if (!lastAssistant)
       return NextResponse.json(
-        { error: { code: "UNAUTHORIZED", message: "Belum login." } },
-        { status: 401 },
+        { error: { code: "NO_MESSAGE", message: "Tidak ada jawaban yang bisa dilanjutkan." } },
+        { status: 400 },
+      );
+    historyForApi = [
+      ...(await loadHistoryBefore(sessionId, lastAssistant.id)),
+      { role: "assistant", content: lastAssistant.content },
+    ];
+    providerMessage = CONTINUE_PROMPT;
+    appendToMessageId = lastAssistant.id;
+  }
+
+  // Cek gambar SEBELUM menyimpan pesan user agar tidak ada giliran yatim.
+  if (wsId && attachmentIds.length && (await hasImageAttachments(wsId, attachmentIds)) && !supportsVision(route))
+    return NextResponse.json(
+      {
+        error: {
+          code: "VISION_UNSUPPORTED",
+          message: "Model ini belum mendukung gambar. Pilih model Gemini atau model vision lain.",
+        },
+      },
+      { status: 400 },
+    );
+
+  // Gambar dari pesan lama di sesi ini juga harus didukung model yang dipilih.
+  if (wsId && sessionId && !isContinue) {
+    const preAttachments = await loadSessionAttachments(wsId, sessionId);
+    if (preAttachments.some((a) => a.kind === "image") && !supportsVision(route))
+      return NextResponse.json(
+        {
+          error: {
+            code: "VISION_UNSUPPORTED",
+            message: "Sesi ini berisi gambar. Pilih model Gemini atau model vision lain.",
+          },
+        },
+        { status: 400 },
       );
   }
 
+  let turn: StartedTurn | null = null;
+  if (!isContinue && wsId) {
+    try {
+      turn = await startChatTurn({ workspaceId: wsId, sessionId, userText: message, attachmentIds });
+    } catch (e) {
+      if (e instanceof ChatTurnError)
+        return NextResponse.json({ error: { code: e.code, message: e.message } }, { status: e.status });
+      throw e;
+    }
+  }
+
+  const contextSessionId = isContinue ? sessionId : turn?.sessionId;
+  const attachments =
+    wsId && contextSessionId ? await loadSessionAttachments(wsId, contextSessionId) : [];
+
+  // Continue bisa memakai gambar lama; cek juga di sini.
+  if (attachments.some((a) => a.kind === "image") && !supportsVision(route))
+    return NextResponse.json(
+      {
+        error: {
+          code: "VISION_UNSUPPORTED",
+          message: "Model ini belum mendukung gambar. Pilih model Gemini atau model vision lain.",
+        },
+      },
+      { status: 400 },
+    );
+
+  const { documentPrompt, images } = buildChatContext(
+    attachments,
+    isContinue ? (lastAssistant?.content ?? "") : message,
+    route.family,
+  );
+  const system = SYSTEM_ID + documentPrompt;
+
   const encoder = new TextEncoder();
   let usageId: string | undefined;
-  let sessionIdFinal = sessionId;
+  let sessionIdFinal = turn?.sessionId ?? sessionId;
 
   const stream = new ReadableStream({
     async start(controller) {
-      const costPer1k = chatCost(model);
+      const enqueue = (payload: unknown) => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+        } catch {
+          // client sudah menutup koneksi (stop); simpan parsial tetap lanjut.
+        }
+      };
 
       try {
+        // Demo tanpa workspace: tidak ada billing/persistensi.
+        if (!wsId) {
+          let reply = "";
+          let lastUsage: StreamUsage | undefined;
+          let finishReason: FinishReason = "stop";
+          await streamChat(
+            route,
+            { system, message: providerMessage, history: historyForApi, images },
+            (text, done, usage, providerFinish) => {
+              if (done) {
+                lastUsage = usage;
+                if (providerFinish === "length" || providerFinish === "MAX_TOKENS") finishReason = "length";
+                return;
+              }
+              reply += text;
+              enqueue({ text });
+            },
+            req.signal,
+          );
+          enqueue({
+            done: true,
+            totalTokens: lastUsage?.totalTokens ?? 0,
+            finishReason,
+            sessionId: sessionIdFinal,
+          });
+          return;
+        }
+
+        const costPer1k = (await modelCost("chat", model)) ?? chatCost(model);
         const result = await withTokensStream(
-          wsId!,
+          wsId,
           costPer1k,
           async (onChunk, signal) => {
-            await runStreamingProvider(model, message, history, (text, done, usage) => {
-              if (done) {
-                onChunk("", true, usage);
-              } else {
-                onChunk(text, false);
-                // ponytail: teruskan delta ke klien — onChunk billing hanya akumulasi;
-                // enqueue setelah cek budget (bisa throw TOKEN_EXHAUSTED).
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
-              }
-            }, signal);
+            await streamChat(
+              route,
+              { system, message: providerMessage, history: historyForApi, images },
+              (text, done, usage, providerFinish) => {
+                if (done) {
+                  onChunk("", true, usage, providerFinish);
+                } else {
+                  onChunk(text, false);
+                  enqueue({ text });
+                }
+              },
+              signal,
+            );
           },
-          {
-            modelId: model,
-            endpointType: "chat",
-            onUsageLogged: (id) => { usageId = id; },
-          },
+          { modelId: model, endpointType: "chat", onUsageLogged: (id) => { usageId = id; } },
           req.signal,
         );
 
-        sessionIdFinal = await saveChatTurn(wsId!, sessionIdFinal, message, result.reply, usageId);
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, totalTokens: result.totalTokens, finishReason: result.finishReason, sessionId: sessionIdFinal })}\n\n`));
+        const finishReason = normalizeFinish(result.finishReason);
+        const assistantMessageId = await finishAssistantTurn({
+          workspaceId: wsId,
+          sessionId: sessionIdFinal || sessionId,
+          reply: result.reply || (finishReason === "aborted" ? "Dihentikan." : ""),
+          usageId,
+          finishReason,
+          appendToMessageId,
+        });
+
+        enqueue({
+          done: true,
+          totalTokens: result.totalTokens,
+          finishReason,
+          sessionId: sessionIdFinal,
+          assistantMessageId,
+        });
       } catch (e) {
         if (e instanceof InsufficientTokensError) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: { code: "INSUFFICIENT_TOKENS", message: `Saldo Token tidak cukup (sisa ${e.balance}). Klaim QR dulu.` } })}\n\n`));
-        } else {
-          const err = e instanceof Error ? e.message : "Streaming error";
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: { code: "PROVIDER_ERROR", message: err } })}\n\n`));
+          enqueue({
+            error: {
+              code: "INSUFFICIENT_TOKENS",
+              message: `Saldo Token tidak cukup (sisa ${e.balance}). Klaim QR / top up dulu.`,
+            },
+            gatekeeper: {
+              decision: "BLOCK",
+              service: "chat",
+              category: "credit",
+              risk_level: "low",
+              reason: "Saldo workspace tidak mencukupi biaya permintaan.",
+              user_message: `Saldo Token tidak cukup (sisa ${e.balance}). Klaim QR / top up dulu.`,
+            },
+          });
+          return;
         }
+
+        // Abort yang lolos dari withTokensStream: jangan simpan apa pun.
+        if (req.signal.aborted) return;
+
+        const messageText = e instanceof Error ? e.message : "Streaming error";
+        if (wsId && !isContinue && turn) {
+          await finishAssistantTurn({
+            workspaceId: wsId,
+            sessionId: sessionIdFinal || sessionId,
+            reply: `Maaf, ${messageText}`,
+            finishReason: "error",
+          }).catch(() => undefined);
+        }
+        enqueue({ error: { code: "PROVIDER_ERROR", message: messageText } });
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // sudah ditutup client
+        }
       }
     },
   });

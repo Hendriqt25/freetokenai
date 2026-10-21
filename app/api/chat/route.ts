@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { DEFAULT_CHAT_MODEL, isGroqModel, isKnownChatModel } from "@/lib/chat-models";
+import { resolveRoute, chatComplete, type AiRoute } from "@/lib/ai-router";
+import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
+import { isModelAllowed, modelCost } from "@/lib/model-registry";
 import { sql } from "@/lib/db";
-import { fetchRetryOnce } from "@/lib/obs";
+import { evaluateAiRequest, gatekeeperAccessResponse, gatekeeperBlockResponse } from "@/lib/gatekeeper";
 import {
   chatCost,
   InsufficientTokensError,
@@ -10,7 +12,8 @@ import {
   workspaceIdForRequest,
 } from "@/lib/billing";
 
-// ponytail: proxy server-only. Key TIDAK PERNAH ke client.
+// Proxy server-only. API key provider diambil dari katalog admin; tidak pernah ke client.
+// Semua model platform memotong Token sesuai harga model.
 const GEMINI_DEFAULT = process.env.GEMINI_MODEL ?? DEFAULT_CHAT_MODEL;
 const SYSTEM_ID =
   "Jawab dalam Bahasa Indonesia yang ringkas dan membantu. " +
@@ -19,88 +22,31 @@ const SYSTEM_ID =
 
 type HistItem = { role?: unknown; content?: unknown };
 
-async function callGroq(model: string, message: string, history: HistItem[]) {
-  const key = process.env.GROQ_API_KEY;
-  if (!key)
-    return NextResponse.json(
-      { error: { code: "NO_API_KEY", message: "GROQ_API_KEY belum diset di .env.local" } },
-      { status: 500 },
-    );
-  // ponytail: NFR#6 — fetchRetryOnce = retry 1x transient (5xx/throw) per provider.
-  const res = await fetchRetryOnce("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: SYSTEM_ID },
-        ...history
-          .slice(-20)
-          .map((m) => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: String(m.content ?? "").slice(0, 8000),
-          })),
-        { role: "user", content: message },
-      ],
-    }),
-    cache: "no-store",
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok)
-    return NextResponse.json(
-      { error: { code: "PROVIDER_ERROR", message: data?.error?.message ?? "Groq error" } },
-      { status: 502 },
-    );
-  const reply = String(data?.choices?.[0]?.message?.content ?? "").trim();
-  if (!reply)
-    return NextResponse.json(
-      { error: { code: "EMPTY_REPLY", message: "Jawaban kosong / diblokir filter." } },
-      { status: 502 },
-    );
-  return NextResponse.json({ reply });
+async function callModel(route: AiRoute, message: string, history: HistItem[]) {
+  const out = await chatComplete(route, { system: SYSTEM_ID, message, history });
+  return out;
 }
 
-async function callGemini(model: string, key: string, message: string, history: HistItem[]) {
-  const contents = [
-    ...history.slice(-20).map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: String(m.content ?? "").slice(0, 8000) }],
-    })),
-    { role: "user", parts: [{ text: message }] },
-  ];
-  const res = await fetchRetryOnce(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        contents,
-        systemInstruction: { parts: [{ text: SYSTEM_ID }] },
-      }),
-      cache: "no-store",
-    },
+async function providerResponse(route: AiRoute, message: string, history: HistItem[]) {
+  const out = await callModel(route, message, history);
+  if (out.ok) return NextResponse.json({ reply: out.reply });
+
+  // platform Gemini sering 503 high-demand -> fallback Groq 20b bila key tersedia
+  if (route.family === "gemini") {
+    const alt = await resolveRoute("openai/gpt-oss-20b", "chat");
+    if (alt) {
+      const retry = await callModel(alt, message, history);
+      if (retry.ok) return NextResponse.json({ reply: retry.reply });
+    }
+  }
+  return NextResponse.json(
+    { error: { code: "PROVIDER_ERROR", message: out.message } },
+    { status: out.status },
   );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok)
-    return NextResponse.json(
-      { error: { code: "PROVIDER_ERROR", message: data?.error?.message ?? "Gemini error" } },
-      { status: 502 },
-    );
-  const reply = (data?.candidates?.[0]?.content?.parts ?? [])
-    .map((p: { text?: string }) => p.text ?? "")
-    .join("")
-    .trim();
-  if (!reply)
-    return NextResponse.json(
-      { error: { code: "EMPTY_REPLY", message: "Jawaban kosong / diblokir filter." } },
-      { status: 502 },
-    );
-  return NextResponse.json({ reply });
 }
 
 // ponytail: persist 1 giliran chat (user + assistant) ke chat_sessions/
-// chat_messages (PRD §5.3); assistant ditautkan usage_log_id (dari withTokens).
-// Autocreate sesi + judul dari pesan pertama. Return id sesi.
+// chat_messages; assistant ditautkan usage_log_id (dari withTokens).
 async function saveChatTurn(
   wsId: string,
   sessionId: string,
@@ -134,9 +80,6 @@ async function saveChatTurn(
   })) as unknown as string;
 }
 
-// ponytail: simpan giliran setelah vendor sukses, lalu kembalikan respons asli
-// + session_id (dipakai klien untuk membuka /dashboard/chat/:id). Persist gagal
-// TIDAK boleh menggagalkan balasan user -> cukup console.error.
 async function persistAndRespond(
   res: NextResponse,
   ctx: { wsId: string; sessionId: string; message: string; usageId?: string },
@@ -174,62 +117,58 @@ export async function POST(req: Request) {
       { error: { code: "INVALID_PROMPT", message: "Pesan tidak boleh kosong." } },
       { status: 400 },
     );
+
+  const gateInput = [
+    message,
+    ...(Array.isArray(body.history)
+      ? body.history
+          .filter((item) => item.role !== "assistant")
+          .slice(-20)
+          .map((item) => String(item.content ?? "").slice(0, 8000))
+      : []),
+  ].join("\n");
+  const gate = gatekeeperBlockResponse(evaluateAiRequest(gateInput, "chat"));
+  if (gate) return gate;
+
   const model = String(body.model ?? GEMINI_DEFAULT).slice(0, 80);
-  if (!isKnownChatModel(model))
+
+  const route = await resolveRoute(model, "chat");
+  if (!route) {
+    if (await isModelAllowed("chat", model))
+      return NextResponse.json(
+        { error: { code: "NO_API_KEY", message: "API key provider belum diisi admin. Hubungi super_admin." } },
+        { status: 500 },
+      );
     return NextResponse.json(
-      { error: { code: "INVALID_MODEL", message: "Model tidak dikenal." } },
+      { error: { code: "INVALID_MODEL", message: "Model tidak dikenal / tidak aktif di katalog." } },
       { status: 400 },
     );
+  }
+
   const history = Array.isArray(body.history) ? body.history : [];
   const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 64) : "";
-  // ponytail: billing Token atomik (PRD §4.3/§5.2) — 402 bila kurang,
-  // refund otomatis bila provider gagal (!ok non-402)/throw. Production anon = 401 tanpa panggil provider.
   const wsId = await workspaceIdForRequest(req);
+
   if (!wsId) {
     if (process.env.NODE_ENV === "production")
-      return NextResponse.json(
-        { error: { code: "UNAUTHORIZED", message: "Belum login." } },
-        { status: 401 },
-      );
-    return runProvider(model, message, history);
+      return gatekeeperAccessResponse("chat", "Belum login.");
+    return providerResponse(route, message, history);
   }
+
   let usageId: string | undefined;
   try {
-    const res = await withTokens(wsId, chatCost(model), () => runProvider(model, message, history), {
+    const cost = (await modelCost("chat", model)) ?? chatCost(model);
+    const res = await withTokens(wsId, cost, () => providerResponse(route, message, history), {
       modelId: model,
       endpointType: "chat",
       onUsageLogged: (id) => {
         usageId = id;
       },
     });
-    // ponytail: hanya persist saat sukses (error sudah di-refund, tak ada usage_log).
     if (res.ok) return persistAndRespond(res, { wsId, sessionId, message, usageId });
     return res;
   } catch (e) {
-    if (e instanceof InsufficientTokensError) return insufficient(e.balance);
+    if (e instanceof InsufficientTokensError) return insufficient(e.balance, "chat");
     throw e;
   }
-}
-
-function runProvider(model: string, message: string, history: HistItem[]) {
-  if (isGroqModel(model)) return callGroq(model, message, history);
-  const key = process.env.GEMINI_API_KEY;
-  if (!key)
-    return Promise.resolve(
-      NextResponse.json(
-        { error: { code: "NO_API_KEY", message: "GEMINI_API_KEY belum diset di .env.local" } },
-        { status: 500 },
-      ),
-    );
-  // ponytail: Gemini sering 503 high-demand -> fallback ke Groq 20b bila ada key,
-  // supaya obrolan tetap dibalas selama salah satu provider hidup.
-  return callGemini(model, key, message, history)
-    .then(async (res) => {
-      if (res.status !== 502 || !process.env.GROQ_API_KEY) return res;
-      return callGroq("openai/gpt-oss-20b", message, history);
-    })
-    .catch(() => {
-      if (process.env.GROQ_API_KEY) return callGroq("openai/gpt-oss-20b", message, history);
-      throw new Error("Gagal menghubungi provider AI");
-    });
 }

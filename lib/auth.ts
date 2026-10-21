@@ -4,7 +4,10 @@ import { sql } from "./db";
 
 // ponytail: auth cookie minimal di atas tabel sessions PRD §5.3. Cookie = id sesi,
 // httpOnly; tanpa lib baru, tanpa JWT — validasi = row ada di DB.
+// Admin console sengaja punya cookie SENDIRI supaya login admin tidak menimpa
+// session customer di browser yang sama (mudah tes dua peran sekaligus).
 export const SESSION_COOKIE = "ftai_session";
+export const ADMIN_SESSION_COOKIE = "ftai_admin_session";
 export const MAX_DEVICES = 2;
 
 // ---- Admin auth (Bearer token cross-origin untuk kasir/ui standalone) ----
@@ -224,10 +227,11 @@ export async function requireAdmin(
   const token = bearerToken(req);
   const claims = token ? verifyAccessToken(token) : null;
   if (claims) user = { id: claims.sub, role: claims.role, cafe_id: claims.cafe_id };
-  // ponytail: fallback cookie sesi web — UI admin same-origin kirim ftai_session, bukan Bearer.
+  // ponytail: fallback cookie sesi web console admin (cookie TERPISAH dari customer).
   // cafe_id null utk sesi cookie → cek forbidden-cafe fail-closed.
   if (!user) {
-    const ctx = await requireAuth(req);
+    const sid = adminSessionIdFrom(req);
+    const ctx = sid ? await authBySessionId(sid) : null;
     if (ctx && (ctx.user.role === "kasir" || ctx.user.role === "super_admin"))
       user = { id: ctx.user.id, role: ctx.user.role as AdminUser["role"], cafe_id: null };
   }
@@ -249,15 +253,26 @@ export type AuthUser = {
 
 export type AuthContext = { user: AuthUser; sessionId: string };
 
-function sessionIdFrom(req: Request): string | null {
-  const m = /(?:^|;\s*)ftai_session=([^;]+)/u.exec(req.headers.get("cookie") ?? "");
+function cookieValueFrom(req: Request, name: string): string | null {
+  const pattern = new RegExp(
+    `(?:^|;\\s*)${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=([^;]+)`,
+    "u",
+  );
+  const m = pattern.exec(req.headers.get("cookie") ?? "");
   const v = m?.[1]?.trim().replace(/^"|"$/g, "");
   return v && /^[0-9a-f-]{8,36}$/iu.test(v) ? v : null;
 }
 
-export async function requireAuth(req: Request): Promise<AuthContext | null> {
-  const sid = sessionIdFrom(req);
-  if (!sid) return null;
+function sessionIdFrom(req: Request): string | null {
+  return cookieValueFrom(req, SESSION_COOKIE);
+}
+
+function adminSessionIdFrom(req: Request): string | null {
+  return cookieValueFrom(req, ADMIN_SESSION_COOKIE);
+}
+
+async function authBySessionId(sid: string): Promise<AuthContext | null> {
+  if (!/^[0-9a-f-]{8,36}$/iu.test(sid)) return null;
   const rows = (await sql`
     SELECT u.id, u.name, u.email, u.phone_number, u.avatar_url, u.role
     FROM sessions s JOIN users u ON u.id = s.user_id
@@ -265,6 +280,11 @@ export async function requireAuth(req: Request): Promise<AuthContext | null> {
   if (!rows[0]) return null;
   await sql`UPDATE sessions SET last_active = now() WHERE id = ${sid}`;
   return { user: rows[0], sessionId: sid };
+}
+
+export async function requireAuth(req: Request): Promise<AuthContext | null> {
+  const sid = sessionIdFrom(req);
+  return sid ? authBySessionId(sid) : null;
 }
 
 export async function requireSuperAdmin(req: Request): Promise<AuthContext | null> {
@@ -276,14 +296,17 @@ export async function requireSuperAdmin(req: Request): Promise<AuthContext | nul
 export async function getServerSession(): Promise<AuthContext | null> {
   const cookieStore = await cookies();
   const sid = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!sid || !/^[0-9a-f-]{8,36}$/iu.test(sid)) return null;
-  const rows = (await sql`
-    SELECT u.id, u.name, u.email, u.phone_number, u.avatar_url, u.role
-    FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.id = ${sid} LIMIT 1`) as unknown as AuthUser[];
-  if (!rows[0]) return null;
-  await sql`UPDATE sessions SET last_active = now() WHERE id = ${sid}`;
-  return { user: rows[0], sessionId: sid };
+  return sid ? authBySessionId(sid) : null;
+}
+
+// Sesi web console admin (cookie terpisah dari customer).
+export async function getAdminServerSession(): Promise<AuthContext | null> {
+  const cookieStore = await cookies();
+  const sid = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
+  if (!sid) return null;
+  const auth = await authBySessionId(sid);
+  if (!auth || (auth.user.role !== 'super_admin' && auth.user.role !== 'kasir')) return null;
+  return auth;
 }
 
 export function sessionCookieHeader(sessionId: string): string {
@@ -291,8 +314,17 @@ export function sessionCookieHeader(sessionId: string): string {
   return `${SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`;
 }
 
+export function adminSessionCookieHeader(sessionId: string): string {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${ADMIN_SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`;
+}
+
 export function clearedSessionCookie(): string {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+export function clearedAdminSessionCookie(): string {
+  return `${ADMIN_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
 // ponytail: device ke-3 = revoke oldest dalam 1 transaksi (PRD §2/§4.2/§5.3).

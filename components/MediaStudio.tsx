@@ -18,6 +18,8 @@ type Kind = "image" | "video";
 
 const IMAGE_STYLES = ["Otomatis", "Fotorealistik", "Anime", "Ilustrasi 3D", "Minimalis", "Sinematik", "Poster"];
 
+// ponytail: models[] di CONFIG = fallback statis; picker sebenarnya tarik katalog
+// dari /admin/models lewat /api/v1/models (state catalog di bawah).
 const CONFIG: Record<
   Kind,
   { title: string; placeholder: string; models: { id: string; credits: number }[]; ratios: string[]; examples: string[]; randomIdeas: string[] }
@@ -90,6 +92,10 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
   const [ratio, setRatio] = useState(cfg.ratios[0]);
   const [style, setStyle] = useState(IMAGE_STYLES[0]);
   const [count, setCount] = useState(1);
+  // ponytail: katalog model aktif dari /admin/models; fallback CONFIG bila API error.
+  const [catalogModels, setCatalogModels] = useState<{ id: string; label?: string; credits: number; provider?: string }[]>(cfg.models);
+  const models: { id: string; label?: string; credits: number; provider?: string }[] =
+    catalogModels.length ? catalogModels : cfg.models;
   const [history, setHistory] = useState<MediaSession[]>([]);
   // ponytail: pending + error tinggal di job module-scope — selamat dari pindah page.
   const [pending, setPending] = useState<MediaJobState[]>(() => listMediaJobs(kind));
@@ -100,14 +106,28 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
 
   const valid = prompt.trim().length > 0;
   const Icon = kind === "image" ? ImageIcon : VideoIcon;
-  const credits = (cfg.models.find((m) => m.id === model)?.credits ?? 0) * (kind === "image" ? count : 1);
+  const credits = (models.find((m) => m.id === model)?.credits ?? 0) * (kind === "image" ? count : 1);
+
+  // ponytail: tarik katalog model sesuai jenis (image/video) + refresh riwayat.
+  useEffect(() => {
+    let alive = true;
+    void import("@/lib/model-catalog").then(({ fetchCatalogModels }) =>
+      fetchCatalogModels(kind).then((list) => {
+        if (!alive) return;
+        setCatalogModels(list.map((m) => ({ id: m.id, label: m.label, credits: m.cost, provider: m.provider })));
+      }),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [kind]);
 
   // ponytail: sesi tersimpan ala PRD — feed = semua sesi, input dikosongkan.
   // Job yang jalan TIDAK direset saat ganti kind — ia milik module, bukan komponen.
   useEffect(() => {
     setHistory(loadMediaHistory(kind));
     setPrompt("");
-    setModel(CONFIG[kind].models[0].id);
+    setModel(models[0]?.id ?? CONFIG[kind].models[0].id);
     setRatio(CONFIG[kind].ratios[0]);
     setPending(listMediaJobs(kind));
     setError(getMediaJobsError());
@@ -282,9 +302,9 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
               onChange={(e) => changeModel(e.target.value)}
               className="rounded-lg bg-white px-2 py-1.5 text-xs font-medium text-neutral-700 outline-none dark:bg-neutral-800 dark:text-neutral-200"
             >
-              {cfg.models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.id}
+              {models.map((m) => (
+                <option key={`${m.provider ?? "model"}-${m.id}`} value={m.id}>
+                  {m.label ?? m.id}
                 </option>
               ))}
             </select>
@@ -459,7 +479,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
                   <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Kredit</p>
                   <p className="mt-1 flex items-center gap-1 text-sm font-semibold">
                     <Zap size={12} className="text-primary" />
-                    {cfg.models.find((m) => m.id === selected.session.model)?.credits ?? "-"}
+                    {models.find((m) => m.id === selected.session.model)?.credits ?? "-"}
                   </p>
                 </div>
                 <div>

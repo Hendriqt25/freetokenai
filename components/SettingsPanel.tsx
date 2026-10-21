@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CHAT_MODELS, DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
+import { fetchCatalogModels, type CatalogModel } from "@/lib/model-catalog";
 import {
   deleteChatSession,
   getChatMessages,
@@ -47,10 +48,14 @@ export default function SettingsPanel() {
   const [contact, setContact] = useState("");
   const [devices, setDevices] = useState<Device[]>([]);
   const [model, setModel] = useState(DEFAULT_CHAT_MODEL);
+  // katalog model chat dari /admin (fallback CHAT_MODELS lama bila API error)
+  const [modelCatalog, setModelCatalog] = useState<CatalogModel[]>(CHAT_MODELS.map((m) => ({ ...m, cost: 1 })));
   const [lang, setLang] = useState<"id" | "en">("id");
   const [isDark, setIsDark] = useState(false);
   const [saved, setSaved] = useState("");
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountError, setAccountError] = useState("");
 
   useEffect(() => {
     setName(getProfile().name);
@@ -64,6 +69,7 @@ export default function SettingsPanel() {
     setModel(app.defaultModel);
     setLang(app.language);
     setIsDark(document.documentElement.classList.contains("dark"));
+    void fetchCatalogModels("chat").then(setModelCatalog);
   }, []);
 
   function flash(msg: string) {
@@ -127,6 +133,35 @@ export default function SettingsPanel() {
     a.download = `dataku-${uid.slice(0, 8)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  async function switchToDev() {
+    setAccountBusy(true);
+    setAccountError("");
+    try {
+      const res = await fetch("/api/v1/auth/dev-login", { method: "POST", credentials: "include" });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        setAccountError(data.error?.message ?? "Gagal masuk sebagai dev.");
+        setAccountBusy(false);
+        return;
+      }
+      window.location.href = "/dashboard";
+    } catch {
+      setAccountError("Gagal beralih akun. Coba lagi.");
+      setAccountBusy(false);
+    }
+  }
+
+  async function logout() {
+    setAccountBusy(true);
+    setAccountError("");
+    try {
+      await fetch("/api/v1/auth/me", { method: "DELETE", credentials: "include" });
+    } catch {
+      // tetap arahkan keluar
+    }
+    window.location.href = "/";
   }
 
   function eraseData() {
@@ -219,6 +254,32 @@ export default function SettingsPanel() {
         </div>
       </Section>
 
+      <Section title="Akun" desc="Akun customer yang sedang dipakai dashboard (cookie ftai_session).">
+        <div className="flex flex-col gap-2.5">
+          <p className="text-sm text-neutral-700 dark:text-neutral-200">
+            Masuk sebagai <span className="font-medium text-neutral-900 dark:text-white">{name || "Tanpa Nama"}</span>
+            {contact && <span className="text-neutral-500 dark:text-neutral-400"> · {contact}</span>}
+          </p>
+          {process.env.NODE_ENV !== "production" && (
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              Mode pengembangan: beralih ke <span className="font-medium">dev@example.com</span> (workspace 1.500 Token).
+              Cookie admin console tidak terpengaruh.
+            </p>
+          )}
+          {accountError && <p className="text-sm text-red-600 dark:text-red-400">{accountError}</p>}
+          <div className="flex flex-wrap gap-2.5">
+            {process.env.NODE_ENV !== "production" && (
+              <button type="button" className={btnPrimary} disabled={accountBusy} onClick={switchToDev}>
+                {accountBusy ? "Memproses…" : "Masuk sebagai Dev (Customer)"}
+              </button>
+            )}
+            <button type="button" className={btnGhost} disabled={accountBusy} onClick={logout}>
+              Keluar
+            </button>
+          </div>
+        </div>
+      </Section>
+
       <Section title="Tampilan" desc="Dark mode manual wajib didukung (PRD 4.5).">
         <div className="flex flex-wrap items-center gap-2.5">
           <button type="button" className={btnGhost} onClick={toggleTheme}>
@@ -234,8 +295,8 @@ export default function SettingsPanel() {
       <Section title="Chat" desc="Model default untuk obrolan baru + kelola riwayat (PRD 7.4).">
         <div className="flex flex-wrap items-center gap-2.5">
           <select aria-label="Model default" value={model} onChange={(e) => changeModel(e.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-white">
-            {CHAT_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
+            {modelCatalog.map((m) => (
+              <option key={`${m.provider ?? "model"}-${m.id}`} value={m.id}>{m.label}</option>
             ))}
           </select>
           <button type="button" className={btnDanger} onClick={wipeChats}>

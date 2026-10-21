@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
+import { generateImages } from "@/lib/ai-media";
+import { resolveRoute } from "@/lib/ai-router";
 import { mapAspect, vioFetch } from "@/lib/vio";
+import { evaluateAiRequest, gatekeeperAccessResponse, gatekeeperBlockResponse } from "@/lib/gatekeeper";
+import { isModelAllowed, modelCost } from "@/lib/model-registry";
 import {
   imageCost,
   InsufficientTokensError,
@@ -15,48 +19,55 @@ export async function POST(req: Request) {
     const { prompt, model, aspect_ratio, count } = await req.json();
     if (!prompt || String(prompt).trim().length === 0)
       return NextResponse.json({ error: { code: "INVALID_PROMPT", message: "Deskripsi tidak boleh kosong." } }, { status: 400 });
-    if (model && !IMAGE_MODELS.includes(model))
+    const gate = gatekeeperBlockResponse(evaluateAiRequest(String(prompt).slice(0, 5000), "image"));
+    if (gate) return gate;
+    const finalModel = String(model ?? "nano-banana-2").slice(0, 120);
+    const route = await resolveRoute(finalModel, "image");
+    if (!route && !(await isModelAllowed("image", finalModel)) && !IMAGE_MODELS.includes(finalModel))
       return NextResponse.json({ error: { code: "INVALID_MODEL", message: "Model tidak dikenal." } }, { status: 400 });
-    const finalModel = model ?? "nano-banana-2";
+    if (!route)
+      return NextResponse.json(
+        { error: { code: "NO_API_KEY", message: "API key provider gambar belum diisi admin. Hubungi super_admin." } },
+        { status: 500 },
+      );
 
-    // ponytail: jumlah dibatasi 2 (hemat kredit lomba), docs izinkan s/d 4.
     const finalCount = Math.min(2, Math.max(1, Number(count) || 1));
-    const payload = {
-      prompt: String(prompt).slice(0, 5000),
-      model: finalModel,
-      aspect_ratio: mapAspect("image", aspect_ratio ?? "1:1"),
-      count: finalCount,
-    };
+    const aspect = mapAspect("image", aspect_ratio ?? "1:1");
+    const finalPrompt = String(prompt).slice(0, 5000);
+
     const run = async () => {
-      const { status, data } = await vioFetch("/images/generate", {
-        method: "POST",
-        body: JSON.stringify(payload),
+      if (route.family === "vio") {
+        const { status, data } = await vioFetch("/images/generate", {
+          method: "POST",
+          body: JSON.stringify({ prompt: finalPrompt, model: finalModel, aspect_ratio: aspect, count: finalCount }),
+        });
+        return NextResponse.json(data, { status });
+      }
+      const out = await generateImages(route, { prompt: finalPrompt, aspect, count: finalCount });
+      if (!out.ok)
+        return NextResponse.json({ error: { code: "PROVIDER_ERROR", message: out.message } }, { status: 502 });
+      return NextResponse.json({
+        status: "completed",
+        asset_url: out.urls[0],
+        asset_urls: out.urls,
       });
-      return NextResponse.json(data, { status });
     };
-    // ponytail: billing Token atomik (PRD §4.3/§6) — vendor gagal (!ok, non-402) = refund otomatis.
-    // Production anon = 401 tanpa panggil provider; dev tanpa workspace = demo tanpa tagihan.
+
     const wsId = await workspaceIdForRequest(req);
     if (!wsId) {
       if (process.env.NODE_ENV === "production")
-        return NextResponse.json(
-          { error: { code: "UNAUTHORIZED", message: "Belum login." } },
-          { status: 401 },
-        );
+        return gatekeeperAccessResponse("image", "Belum login.");
       return run();
     }
     try {
-      return await withTokens(wsId, imageCost(finalModel), run, {
-        modelId: finalModel,
-        endpointType: "image",
-      });
+      const cost = (await modelCost("image", finalModel)) ?? imageCost(finalModel);
+      return await withTokens(wsId, cost, run, { modelId: finalModel, endpointType: "image" });
     } catch (e) {
-      if (e instanceof InsufficientTokensError) return insufficient(e.balance);
+      if (e instanceof InsufficientTokensError) return insufficient(e.balance, "image");
       throw e;
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";
-    const code = msg.includes("VIO_API_KEY") ? 500 : 502;
-    return NextResponse.json({ error: { code: "SERVER_ERROR", message: msg } }, { status: code });
+    return NextResponse.json({ error: { code: "SERVER_ERROR", message: msg } }, { status: 502 });
   }
 }

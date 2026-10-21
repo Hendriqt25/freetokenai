@@ -15,15 +15,29 @@ export type ChatSession = {
   updated_at: string;
 };
 
+export type ChatAttachment = {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  kind: "document" | "image";
+  char_count: number;
+};
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  finish_reason?: string | null;
+  attachments?: ChatAttachment[];
 };
 
 export const CHAT_CHANGED = "ftai:chat-changed";
 export const CHAT_NEW = "ftai:chat-new";
+export const MESSAGE_PAGE_SIZE = 30;
+
+export type MessagesPage = { messages: ChatMessage[]; hasMore: boolean };
 
 const sessionsKey = () => `ftai:chat:${currentUserId()}:sessions`;
 const messagesKey = (id: string) => `ftai:chat:${currentUserId()}:messages:${id}`;
@@ -91,19 +105,52 @@ export async function hydrateSessions(): Promise<void> {
   notifyChatChanged();
 }
 
-export async function hydrateMessages(sessionId: string): Promise<void> {
+export async function hydrateMessages(sessionId: string): Promise<MessagesPage> {
   try {
-    const res = await fetch(`/api/v1/chat/sessions/${sessionId}/messages`, { cache: "no-store" });
+    const res = await fetch(
+      `/api/v1/chat/sessions/${sessionId}/messages?limit=${MESSAGE_PAGE_SIZE}`,
+      { cache: "no-store" },
+    );
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
     if (Array.isArray(data?.messages)) {
       messagesCache.set(sessionId, data.messages);
       write(messagesKey(sessionId), data.messages);
+      notifyChatChanged();
+      return { messages: data.messages, hasMore: Boolean(data.has_more) };
     }
   } catch {
     // biarkan cache/localStorage yang ada
   }
   notifyChatChanged();
+  return { messages: getChatMessages(sessionId), hasMore: false };
+}
+
+/** Muat halaman lebih lama lalu prepend ke cache. */
+export async function loadOlderMessages(
+  sessionId: string,
+  beforeId: string,
+): Promise<{ added: number; hasMore: boolean }> {
+  try {
+    const res = await fetch(
+      `/api/v1/chat/sessions/${sessionId}/messages?limit=${MESSAGE_PAGE_SIZE}&before=${encodeURIComponent(beforeId)}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    if (!Array.isArray(data?.messages)) return { added: 0, hasMore: false };
+
+    const existing = getChatMessages(sessionId);
+    const known = new Set(existing.map((m) => m.id));
+    const older = (data.messages as ChatMessage[]).filter((m) => !known.has(m.id));
+    const merged = [...older, ...existing];
+    messagesCache.set(sessionId, merged);
+    write(messagesKey(sessionId), merged);
+    notifyChatChanged();
+    return { added: older.length, hasMore: Boolean(data.has_more) };
+  } catch {
+    return { added: 0, hasMore: false };
+  }
 }
 
 export async function createChatSession(): Promise<ChatSession> {

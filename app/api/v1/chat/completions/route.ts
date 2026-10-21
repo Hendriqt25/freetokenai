@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { chatCost, InsufficientTokensError, insufficient, validateApiKey, withTokens } from "@/lib/billing";
+import { modelCost, providerKey } from "@/lib/model-registry";
 import { fetchRetryOnce } from "@/lib/obs";
 import { rateLimited } from "@/lib/rate-limit";
+import { evaluateAiRequest, gatekeeperAccessResponse, gatekeeperBlockResponse } from "@/lib/gatekeeper";
 
 // ponytail: gateway publik (PRD 7.3: POST /v1/chat/completions, key rst_live_*).
 // Format-valid -> hash SHA-256 ke api_keys DB -> rate-limit Redis 60/mnt by
@@ -23,23 +25,14 @@ export async function POST(req: Request) {
   const auth = req.headers.get("authorization") ?? "";
   const m = /^Bearer\s+(rst_live_[A-Za-z0-9]{10,})$/u.exec(auth.trim());
   if (!m)
-    return NextResponse.json(
-      {
-        error: {
-          code: "UNAUTHORIZED",
-          message:
-            "API key tidak valid. Generate di halaman Developer API (/dashboard/developer) lalu pakai: Authorization: Bearer rst_live_... Model: resto-chat-fast / resto-chat-pro.",
-        },
-      },
-      { status: 401 },
+    return gatekeeperAccessResponse(
+      "developer_api",
+      "API key tidak valid. Generate di halaman Developer API (/dashboard/developer) lalu pakai: Authorization: Bearer rst_live_... Model: resto-chat-fast / resto-chat-pro.",
     );
   const apiKey = m[1];
   const valid = await validateApiKey(apiKey);
   if (!valid)
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "API key tidak dikenal / nonaktif." } },
-      { status: 401 },
-    );
+    return gatekeeperAccessResponse("developer_api", "API key tidak dikenal / nonaktif.");
   // ponytail: rate-limit SETELAH lookup, kunci = api_key_id (uuid aman log).
   if (await rateLimited(`gw:${valid.id}`))
     return NextResponse.json(
@@ -64,6 +57,12 @@ export async function POST(req: Request) {
       { error: { code: "INVALID_PROMPT", message: "messages harus berisi pesan user." } },
       { status: 400 },
     );
+  const gateInput = messages
+    .slice(-20)
+    .map((item) => String(item.content ?? "").slice(0, 8000))
+    .join("\n");
+  const gate = gatekeeperBlockResponse(evaluateAiRequest(gateInput, "developer_api"));
+  if (gate) return gate;
   const modelId = String(body.model ?? "resto-chat-fast");
   const groqModel = MODEL_MAP[modelId] ?? null;
   if (!groqModel)
@@ -77,17 +76,17 @@ export async function POST(req: Request) {
       { status: 400 },
     );
 
-  const key = process.env.GROQ_API_KEY;
+  const key = (await providerKey("groq")) ?? process.env.GROQ_API_KEY;
   if (!key)
     return NextResponse.json(
-      { error: { code: "NO_API_KEY", message: "GROQ_API_KEY belum diset di server." } },
+      { error: { code: "NO_API_KEY", message: "API key Groq belum diisi (menu Model & API Key di /admin)." } },
       { status: 500 },
     );
   const history = messages.slice(0, -1).slice(-20).map((x) => ({
     role: x.role === "assistant" ? "assistant" : "user",
     content: String(x.content ?? "").slice(0, 8000),
   }));
-  const cost = chatCost(modelId);
+  const cost = (await modelCost("chat", groqModel)) ?? chatCost(modelId);
   try {
     return await withTokens(
       valid.workspace_id,
@@ -125,7 +124,7 @@ export async function POST(req: Request) {
       { apiKeyId: valid.id, modelId, endpointType: "chat" },
     );
   } catch (e) {
-    if (e instanceof InsufficientTokensError) return insufficient(e.balance);
+    if (e instanceof InsufficientTokensError) return insufficient(e.balance, "developer_api");
     throw e;
   }
 }
