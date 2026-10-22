@@ -147,7 +147,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
 
           <nav className="mt-3 flex flex-col gap-1 px-4">
             {navItems.map(({ label, icon: Icon, href }) => (
-              <a
+              <Link
                 key={label}
                 href={href}
                 onClick={onClose}
@@ -158,7 +158,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
               >
                 <Icon size={18} className="shrink-0" />
                 {!collapsed && label}
-              </a>
+              </Link>
             ))}
           </nav>
 
@@ -225,7 +225,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
 
       {/* Footer fixed: Pengaturan + profil, selalu terlihat, di luar area scroll. */}
       <div className="px-4 py-3">
-        <a
+        <Link
           href="/dashboard/settings"
           title={collapsed ? "Pengaturan" : undefined}
           className={`flex items-center rounded-lg text-[13px] text-neutral-700 transition hover:bg-neutral-200/60 dark:text-neutral-200 dark:hover:bg-neutral-800 ${
@@ -234,7 +234,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
         >
           <Settings size={18} className="shrink-0" />
           {!collapsed && "Pengaturan"}
-        </a>
+        </Link>
 
         <div className="my-2 border-t border-neutral-200 dark:border-neutral-800" />
 

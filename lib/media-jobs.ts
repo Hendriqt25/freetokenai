@@ -3,6 +3,7 @@
 // unmount; selesai -> saveMediaSession. Satu-satunya yang hilang saat full
 // reload adalah genId yang belum selesai (localStorage hanya simpan hasil jadi).
 import { saveMediaSession } from "./media-history";
+import { notifyWorkspaceChanged } from "./settings";
 
 export type MediaJobState = { key: string; kind: "image" | "video"; text: string; count: number };
 
@@ -112,6 +113,8 @@ export function startMediaJob(args: {
       }
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || `Gagal (${res.status})`);
+      // saldo sudah dipotong server saat POST diterima — segarkan saldo TopBar.
+      notifyWorkspaceChanged();
 
       // Gambar sinkron: provider langsung mengembalikan hasil.
       const immediate = (data.asset_urls as string[] | undefined) ?? (data.asset_url ? [data.asset_url] : []);

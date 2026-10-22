@@ -53,6 +53,8 @@ export type BillingMeta = {
   modelId: string;
   endpointType: "chat" | "image" | "video";
   mediaUrl?: string | null;
+  // ponytail: pengali biaya per request (mis. 2 gambar = 2×). Dibaca `withTokens`.
+  units?: number;
   // ponytail: callback id usage_log yang baru dibuat — /api/chat menautkan
   // baris assistant chat_messages.usage_log_id (PRD §5.3). Opsional, aditif.
   onUsageLogged?: (usageId: string) => void;
@@ -122,10 +124,11 @@ async function refund(workspaceId: string, cost: number, meta: BillingMeta, ledg
 // PRD §5.2: deduct + usage-extend satu statement (expired -> +7d, aktif -> tetap).
 export async function withTokens<T extends NextResponse>(
   workspaceId: string,
-  cost: number,
+  baseCost: number,
   fn: () => Promise<T>,
   meta: BillingMeta,
 ): Promise<T> {
+  const cost = Math.max(1, Math.ceil(baseCost * (meta.units ?? 1)));
   const deducted = await deduct(workspaceId, cost);
   if (!deducted) throw new InsufficientTokensError(await balanceOf(workspaceId));
   // ponytail: NFR#5 — satu log per billed call (choke point semua AI routes).
@@ -202,7 +205,11 @@ export async function withTokensStream(
   streamFn: (onChunk: (text: string, done: boolean, usage?: { promptTokens: number; completionTokens: number; totalTokens: number }, providerFinish?: string) => void, signal: AbortSignal) => Promise<void>,
   meta: BillingMeta,
   signal: AbortSignal,
+  // ponytail: token prompt (dokumen lampiran + history) ikut ditagih — provider
+  // menagih input juga, jadi PDF panjang wajib lebih mahal (bukan cuma jawaban).
+  inputChars = 0,
 ): Promise<StreamMeteredResult> {
+  const inputTokens = inputChars > 0 ? Math.ceil(inputChars / 4) : 0;
   const balance = await balanceOf(workspaceId);
   if (balance < 5) throw new InsufficientTokensError(balance);
 
@@ -215,16 +222,22 @@ export async function withTokensStream(
   let totalTokens = 0;
   let finishReason: StreamMeteredResult["finishReason"] = "stop";
 
+  // Batas atas token terjangkau sudah termasuk prompt; tanpa ini stream bisa
+  // menagih lebih dari saldo untuk dokumen raksasa.
+  const tokensAllowed = Math.floor(balance / costPer1k) * 1000;
+  if (inputTokens > tokensAllowed) {
+    throw new InsufficientTokensError(balance);
+  }
+
   await streamFn(
     (text, done, usage, providerFinish) => {
       if (done) {
-        if (usage) totalTokens = usage.totalTokens;
+        if (usage) totalTokens = Math.max(usage.totalTokens, inputTokens + usage.completionTokens);
         if (providerFinish === "length" || providerFinish === "MAX_TOKENS")
           finishReason = "length";
       } else {
         reply += text;
-        totalTokens += countTokens(text);
-        const tokensAllowed = Math.floor(balance / costPer1k) * 1000;
+        totalTokens = inputTokens + countTokens(reply);
         if (totalTokens > tokensAllowed) {
           finishReason = "token_exhausted";
           throw new Error("TOKEN_EXHAUSTED");
@@ -243,6 +256,7 @@ export async function withTokensStream(
     throw e;
   });
 
+  if (totalTokens === 0) totalTokens = inputTokens;
   const actualTokens = totalTokens || 0;
   const cost = Math.ceil((actualTokens / 1000) * costPer1k);
 

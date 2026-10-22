@@ -6,26 +6,600 @@
 - Local:         http://localhost:3000
 - Network:       http://192.168.56.1:3000
 - Environments: .env.local
-✓ Ready in 1095ms
-✓ Running next.config.mjs took 35ms
+✓ Ready in 4.9s
+✓ Running next.config.mjs took 24ms
 
- GET /admin 307 in 2.4s (next.js: 2.1s, application-code: 235ms)
-{"t":"req","ts":"2026-10-11T06:38:50.673Z","reqId":"ca113dfa-c0dc-469a-ad87-63448dcae783","endpoint":"POST /api/v1/admin/auth/cookie-login","note":"gw"}
- POST /api/v1/admin/auth/cookie-login 500 in 1133ms (next.js: 589ms, proxy.ts: 70ms, application-code: 474ms)
-{"t":"req","ts":"2026-10-11T06:39:01.560Z","reqId":"71818e66-9e2c-4df5-bd1d-0c646e5b26e3","endpoint":"POST /api/v1/admin/auth/cookie-login","note":"gw"}
- POST /api/v1/admin/auth/cookie-login 500 in 922ms (next.js: 4ms, proxy.ts: 5ms, application-code: 913ms)
-{"t":"req","ts":"2026-10-11T06:43:58.727Z","reqId":"640a1376-898e-4d8f-8e1b-fdc13ece8585","endpoint":"POST /api/v1/admin/auth/cookie-login","note":"gw"}
- POST /api/v1/admin/auth/cookie-login 200 in 1364ms (next.js: 287ms, proxy.ts: 647ms, application-code: 430ms)
- GET /admin 200 in 1274ms (next.js: 755ms, application-code: 519ms)
- GET /admin 307 in 137ms (next.js: 19ms, application-code: 118ms)
-{"t":"req","ts":"2026-10-11T06:44:38.118Z","reqId":"e2852afc-26a2-47a4-806b-46ddc2bb8e07","endpoint":"POST /api/chat/stream","note":"gw"}
-○ Compiling /api/chat/stream ...
-✓ Finished filesystem cache database compaction in 38.0s
- POST /api/chat/stream 400 in 12.1s (next.js: 11.9s, proxy.ts: 57ms, application-code: 72ms)
-{"t":"req","ts":"2026-10-11T06:45:24.578Z","reqId":"735a7e9b-68ac-462e-bda7-4d21ec228102","endpoint":"POST /api/chat/stream","note":"gw"}
- POST /api/chat/stream 400 in 35ms (next.js: 10ms, proxy.ts: 13ms, application-code: 12ms)
-{"t":"req","ts":"2026-10-11T06:46:07.160Z","reqId":"1c257b40-0206-4c0d-8864-0722f6116a1f","endpoint":"POST /api/chat/stream","note":"gw"}
- POST /api/chat/stream 200 in 625ms (next.js: 10ms, proxy.ts: 6ms, application-code: 609ms)
-{"t":"req","ts":"2026-10-11T06:47:06.828Z","reqId":"f24287d4-ed56-4886-a630-3e41b3934ad1","endpoint":"POST /api/chat/stream","note":"gw"}
-{"t":"req","ts":"2026-10-11T06:47:07.652Z","reqId":"db4db7f5-dea4-49f8-8ce4-2fb25342251e","ws":"b07d338b-9400-461a-9c4b-ac7a35f74d32","endpoint":"chat","latencyMs":778,"status":200,"ok":true}
- POST /api/chat/stream 200 in 842ms (next.js: 18ms, proxy.ts: 8ms, application-code: 817ms)
+ GET / 307 in 1752ms (next.js: 1407ms, application-code: 344ms)
+ GET /dashboard 200 in 295ms (next.js: 150ms, application-code: 145ms)
+{"t":"req","ts":"2026-10-22T15:47:50.025Z","reqId":"bd4d7133-fb04-42fc-b989-9c98acd96215","endpoint":"GET /api/v1/auth/me","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:47:50.033Z","reqId":"231cd1d8-c4b9-4906-b01b-051dcf759164","endpoint":"GET /api/v1/auth/me","note":"gw"}
+ GET /api/v1/auth/me 500 in 709ms (next.js: 445ms, proxy.ts: 127ms, application-code: 137ms)
+ GET /api/v1/auth/me 500 in 722ms (next.js: 500ms, proxy.ts: 129ms, application-code: 92ms)
+{"t":"req","ts":"2026-10-22T15:47:50.708Z","reqId":"af7ce450-7e14-4b17-bf45-365c8b45287d","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:47:50.715Z","reqId":"6a86d213-2415-434a-be93-3d7a00f37ff4","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:47:50.719Z","reqId":"778aee39-ad54-4ff4-9af9-af2ddf408378","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:47:50.723Z","reqId":"857f242c-442b-40e0-9214-71a9e020b209","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:47:50.728Z","reqId":"9e423624-e37a-4500-82f8-35f3a3b825e7","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:47:50.736Z","reqId":"fd209020-bb54-4e1c-b8a4-097c35cd0a99","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/workspace 500 in 474ms (next.js: 104ms, proxy.ts: 27ms, application-code: 343ms)
+ GET /api/v1/models?kind=chat 500 in 490ms (next.js: 201ms, proxy.ts: 26ms, application-code: 263ms)
+ GET /api/v1/models?kind=chat 500 in 480ms (next.js: 194ms, proxy.ts: 33ms, application-code: 254ms)
+ GET /api/v1/chat/sessions 500 in 508ms (next.js: 301ms, proxy.ts: 25ms, application-code: 182ms)
+ GET /api/v1/chat/sessions 500 in 496ms (next.js: 292ms, proxy.ts: 28ms, application-code: 175ms)
+ GET /api/v1/users/profile 500 in 508ms (next.js: 394ms, proxy.ts: 27ms, application-code: 86ms)
+{"t":"req","ts":"2026-10-22T15:47:51.211Z","reqId":"498506ae-e786-4308-83b4-2393d4cb5456","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:47:51.215Z","reqId":"ab8e8b4a-7c94-485c-91d9-b4b775df2c84","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/workspace 500 in 48ms (next.js: 14ms, proxy.ts: 9ms, application-code: 25ms)
+ GET /api/v1/users/profile 500 in 52ms (next.js: 20ms, proxy.ts: 9ms, application-code: 22ms)
+{"t":"req","ts":"2026-10-22T15:47:51.266Z","reqId":"9e1bd438-1367-419d-bbf9-233823a78bec","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 500 in 24ms (next.js: 4ms, proxy.ts: 7ms, application-code: 13ms)
+{"t":"req","ts":"2026-10-22T15:47:51.288Z","reqId":"88f6508d-6c5a-4a05-9943-24c235d7fff0","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 500 in 30ms (next.js: 4ms, proxy.ts: 3ms, application-code: 22ms)
+ GET /dashboard/image 200 in 152ms (next.js: 111ms, application-code: 42ms)
+{"t":"req","ts":"2026-10-22T15:48:31.284Z","reqId":"a21384c5-fb5a-4de7-89cc-1339551c4657","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:31.361Z","reqId":"1c4650fa-a70b-4217-a34d-d175824dcac9","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:31.366Z","reqId":"ec1bd226-e4b3-4a0d-8f25-fa80317abaf7","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:31.378Z","reqId":"77a9aa64-bc09-4269-9f4a-9dd5b205760e","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:31.447Z","reqId":"582e57f0-e14c-4ade-b618-73e5115fdea2","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:31.452Z","reqId":"13b4fff1-117c-4157-a58c-f22e03adcd31","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/chat/sessions 500 in 222ms (next.js: 97ms, proxy.ts: 18ms, application-code: 107ms)
+ GET /api/v1/users/profile 500 in 243ms (next.js: 52ms, proxy.ts: 71ms, application-code: 119ms)
+ GET /api/v1/workspace 500 in 246ms (next.js: 64ms, proxy.ts: 72ms, application-code: 110ms)
+{"t":"req","ts":"2026-10-22T15:48:31.550Z","reqId":"c6349891-bb6c-44bb-a6c4-a48a421da831","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/chat/sessions 500 in 187ms (next.js: 84ms, proxy.ts: 10ms, application-code: 92ms)
+{"t":"req","ts":"2026-10-22T15:48:31.564Z","reqId":"c806c58c-bd74-4401-af80-a2953a4007e7","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/models?kind=image 500 in 163ms (next.js: 62ms, proxy.ts: 50ms, application-code: 51ms)
+ GET /api/v1/models?kind=image 500 in 171ms (next.js: 54ms, proxy.ts: 49ms, application-code: 69ms)
+ GET /api/v1/users/profile 500 in 69ms (next.js: 28ms, proxy.ts: 7ms, application-code: 35ms)
+ GET /api/v1/workspace 500 in 62ms (next.js: 33ms, proxy.ts: 7ms, application-code: 22ms)
+ GET /dashboard/video 200 in 104ms (next.js: 74ms, application-code: 29ms)
+{"t":"req","ts":"2026-10-22T15:48:32.446Z","reqId":"1aa5c9f3-481f-40b9-9596-9b0f6b2c8e98","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:32.449Z","reqId":"573840a0-b772-4763-bab0-b3a1b36c5daa","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:32.452Z","reqId":"414a9ee6-df3a-4277-97d1-2489b5b757bd","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:32.454Z","reqId":"ebf1d119-9a78-43be-8f40-d3069675798d","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:32.467Z","reqId":"930eced9-2164-4f31-a206-67d5113edb8a","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:32.484Z","reqId":"680c21da-e8bb-4d24-b784-32de36aef28d","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/chat/sessions 500 in 242ms (next.js: 85ms, proxy.ts: 22ms, application-code: 135ms)
+ GET /api/v1/chat/sessions 500 in 255ms (next.js: 57ms, proxy.ts: 23ms, application-code: 174ms)
+ GET /api/v1/workspace 500 in 10.8s (next.js: 170ms, proxy.ts: 30ms, application-code: 10.6s)
+{"t":"req","ts":"2026-10-22T15:48:43.223Z","reqId":"da30a971-234c-4674-9994-b42b6d76ec94","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /dashboard/chat/3fe277a4-a292-4d68-968b-501584064396 200 in 1049ms (next.js: 1000ms, application-code: 48ms)
+{"t":"req","ts":"2026-10-22T15:48:44.339Z","reqId":"4ea7638d-a177-4699-8f33-caf718d31e89","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:48:44.352Z","reqId":"c5a7b7c4-39d5-4bd4-b8fc-e049ecc78462","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=video 500 in 12.2s (next.js: 169ms, proxy.ts: 44ms, application-code: 12.0s)
+{"t":"req","ts":"2026-10-22T15:48:44.629Z","reqId":"3bb412af-f017-44cc-9b62-016ec5e52c84","endpoint":"GET /api/v1/chat/sessions/3fe277a4-a292-4d68-968b-501584064396/messages","note":"gw"}
+ GET /api/v1/chat/sessions/3fe277a4-a292-4d68-968b-501584064396/messages?limit=30 500 in 950ms (next.js: 917ms, proxy.ts: 10ms, application-code: 23ms)
+{"t":"req","ts":"2026-10-22T15:48:45.578Z","reqId":"9049bc68-ca67-48de-b724-de2351b6bdf6","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+ GET /api/v1/models?kind=video 500 in 14.6s (next.js: 117ms, proxy.ts: 21ms, application-code: 14.5s)
+{"t":"req","ts":"2026-10-22T15:48:47.085Z","reqId":"6c6eab46-e62e-4bba-93d3-364d0adb886d","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 500 in 35ms (next.js: 10ms, proxy.ts: 8ms, application-code: 18ms)
+{"t":"req","ts":"2026-10-22T15:48:47.120Z","reqId":"369c4006-f5a4-407f-abcf-36f1621611fd","endpoint":"GET /api/v1/chat/sessions/3fe277a4-a292-4d68-968b-501584064396/messages","note":"gw"}
+ GET /api/v1/chat/sessions 500 in 2.1s (next.js: 8ms, proxy.ts: 6ms, application-code: 2.1s)
+{"t":"req","ts":"2026-10-22T15:48:47.668Z","reqId":"cd3c74ee-e1fc-46b1-8b6d-59abf0be73a8","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/users/profile 500 in 15.4s (next.js: 148ms, proxy.ts: 21ms, application-code: 15.2s)
+{"t":"req","ts":"2026-10-22T15:48:47.851Z","reqId":"458a2810-1a85-40bc-8d31-148b2b3480dc","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/workspace 500 in 5.9s (next.js: 6ms, proxy.ts: 10ms, application-code: 5.9s)
+ GET /dashboard/chat/3fe277a4-a292-4d68-968b-501584064396 200 in 56ms (next.js: 19ms, application-code: 37ms)
+{"t":"req","ts":"2026-10-22T15:48:49.174Z","reqId":"68b8061e-9826-421c-a45d-34d56d8bd908","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/chat/sessions 500 in 6.7s (next.js: 24ms, proxy.ts: 23ms, application-code: 6.6s)
+{"t":"req","ts":"2026-10-22T15:48:50.999Z","reqId":"49fb20fc-e23a-4991-b38a-b13fd588ec49","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/models?kind=chat 500 in 7.1s (next.js: 39ms, proxy.ts: 27ms, application-code: 7.1s)
+ GET /dashboard/chat/3fe277a4-a292-4d68-968b-501584064396 200 in 48ms (next.js: 16ms, application-code: 32ms)
+ GET /api/v1/models?kind=chat 500 in 9.3s (next.js: 4ms, proxy.ts: 3ms, application-code: 9.3s)
+ GET /api/v1/chat/sessions/3fe277a4-a292-4d68-968b-501584064396/messages?limit=30 500 in 10.7s (next.js: 26ms, proxy.ts: 5ms, application-code: 10.6s)
+ GET /api/v1/models?kind=chat 500 in 12.4s (next.js: 7ms, proxy.ts: 6ms, application-code: 12.3s)
+ GET /api/v1/workspace 500 in 9.3s (next.js: 7ms, proxy.ts: 4ms, application-code: 9.3s)
+{"t":"req","ts":"2026-10-22T15:49:00.288Z","reqId":"7819f232-3dc6-454a-958e-1320db11944d","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/users/profile 500 in 14.7s (next.js: 5ms, proxy.ts: 9ms, application-code: 14.7s)
+{"t":"req","ts":"2026-10-22T15:49:03.882Z","reqId":"d2d27a7e-fe23-4f7a-9321-e2037a87e44e","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/users/profile 500 in 53ms (next.js: 11ms, proxy.ts: 10ms, application-code: 32ms)
+{"t":"req","ts":"2026-10-22T15:49:03.938Z","reqId":"440c6e4d-3804-477a-9b0b-d18018e0889f","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:49:04.352Z","reqId":"f1e5e62c-bd49-457e-bc39-011b41fcfaea","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T15:49:04.356Z","reqId":"7b1177c9-981c-4940-b6fc-e3d39e2c87b2","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 500 in 53ms (next.js: 19ms, proxy.ts: 11ms, application-code: 23ms)
+ GET /api/v1/workspace 500 in 1006ms (next.js: 12ms, proxy.ts: 11ms, application-code: 983ms)
+ GET /api/v1/workspace 500 in 6.1s (next.js: 8ms, proxy.ts: 7ms, application-code: 6.1s)
+ GET /api/v1/users/profile 500 in 3.3s (next.js: 8ms, proxy.ts: 9ms, application-code: 3.2s)
+{"t":"req","ts":"2026-10-22T15:53:55.879Z","reqId":"2d6952e3-8ff9-4a1f-a357-cd09583093a7","endpoint":"POST /api/v1/auth/dev-login","note":"gw"}
+ POST /api/v1/auth/dev-login 500 in 155ms (next.js: 104ms, proxy.ts: 30ms, application-code: 22ms)
+{"t":"req","ts":"2026-10-22T15:53:56.134Z","reqId":"5faaed90-0b9f-4167-b853-d3fda6b1c03d","endpoint":"POST /api/chat/stream","note":"gw"}
+ POST /api/chat/stream 400 in 101ms (next.js: 65ms, proxy.ts: 8ms, application-code: 29ms)
+{"t":"req","ts":"2026-10-22T15:54:07.879Z","reqId":"00216ff3-cf42-450c-9a73-455b2207e95b","endpoint":"POST /api/chat/stream","note":"gw"}
+ POST /api/chat/stream 403 in 27ms (next.js: 5ms, proxy.ts: 4ms, application-code: 17ms)
+✓ Compiled in 19.2s
+✓ Compiled in 425ms
+{"t":"req","ts":"2026-10-22T16:06:51.250Z","reqId":"ad2dc666-d678-406c-84ab-bd42209dc8dd","endpoint":"POST /api/v1/auth/dev-login","note":"gw"}
+ POST /api/v1/auth/dev-login 500 in 54ms (next.js: 12ms, proxy.ts: 13ms, application-code: 28ms)
+{"t":"req","ts":"2026-10-22T16:06:51.378Z","reqId":"2ca84c95-d563-45a7-950c-e92ee6da93c1","endpoint":"POST /api/chat/stream","note":"gw"}
+ POST /api/chat/stream 500 in 42ms (next.js: 17ms, proxy.ts: 4ms, application-code: 21ms)
+{"t":"req","ts":"2026-10-22T16:08:56.090Z","reqId":"e0f0c2de-a039-477b-bd69-8257bf7f2043","endpoint":"POST /api/chat/stream","note":"gw"}
+ POST /api/chat/stream 403 in 46ms (next.js: 12ms, proxy.ts: 4ms, application-code: 30ms)
+{"t":"req","ts":"2026-10-22T16:10:06.673Z","reqId":"973b618c-8e35-43d5-96f7-cf87da572749","endpoint":"POST /api/v1/auth/dev-login","note":"gw"}
+ POST /api/v1/auth/dev-login 200 in 400ms (next.js: 84ms, proxy.ts: 41ms, application-code: 275ms)
+{"t":"req","ts":"2026-10-22T16:10:07.297Z","reqId":"9ca5e8bf-41a8-4518-a7ce-d205d0856143","endpoint":"POST /api/chat/stream","note":"gw"}
+ POST /api/chat/stream 200 in 156ms (next.js: 24ms, proxy.ts: 43ms, application-code: 90ms)
+{"t":"req","ts":"2026-10-22T16:10:22.323Z","reqId":"87bd763b-3ca8-45d2-bd92-41fe5cf522e7","endpoint":"GET /api/v1/chat/sessions/83715403-4a4a-4a80-b4a7-d47507c5bc54/messages","note":"gw"}
+ GET /api/v1/chat/sessions/83715403-4a4a-4a80-b4a7-d47507c5bc54/messages?limit=30 200 in 256ms (next.js: 141ms, proxy.ts: 33ms, application-code: 83ms)
+{"t":"req","ts":"2026-10-22T16:10:37.038Z","reqId":"93077d9f-0ec4-4dbf-bba8-d9e1f244eae3","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:10:40.135Z","reqId":"6ee14c95-6e83-4cdc-a910-8b3040cccb38","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":2953,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 3.1s (next.js: 29ms, proxy.ts: 14ms, application-code: 3.1s)
+ GET /dashboard/chat/3fe277a4-a292-4d68-968b-501584064396 200 in 831ms (next.js: 194ms, application-code: 636ms)
+{"t":"req","ts":"2026-10-22T16:13:07.602Z","reqId":"728386a1-530e-4e9e-b425-37538b350b91","endpoint":"GET /api/v1/auth/me","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:07.619Z","reqId":"684e57b9-74db-4fa8-8efc-7dd22aeb951b","endpoint":"GET /api/v1/auth/me","note":"gw"}
+ GET /api/v1/auth/me 200 in 168ms (next.js: 41ms, proxy.ts: 42ms, application-code: 85ms)
+ GET /api/v1/auth/me 200 in 251ms (next.js: 85ms, proxy.ts: 43ms, application-code: 124ms)
+{"t":"req","ts":"2026-10-22T16:13:07.901Z","reqId":"4e6bf274-5754-4bd8-8fad-a095516c9751","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:07.910Z","reqId":"b44af879-d038-4aa0-8939-7d4ecbd71192","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:07.926Z","reqId":"ee6ac986-c4a1-454d-bf66-1cb7391f0ddb","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:07.937Z","reqId":"3973cee3-d52e-48be-be5e-603253933693","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:07.946Z","reqId":"a451cda7-622e-4bda-900f-ec6cb913c5ab","endpoint":"GET /api/v1/chat/sessions/3fe277a4-a292-4d68-968b-501584064396/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:07.951Z","reqId":"552b0997-c9d7-4eb0-97f0-730b30ada07d","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 319ms (next.js: 126ms, proxy.ts: 44ms, application-code: 150ms)
+{"t":"req","ts":"2026-10-22T16:13:08.258Z","reqId":"89fc5f0c-c0a5-470c-9322-3a46d91e84e6","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 479ms (next.js: 100ms, proxy.ts: 53ms, application-code: 326ms)
+{"t":"req","ts":"2026-10-22T16:13:08.376Z","reqId":"22051506-530d-4dde-8364-c524281c378a","endpoint":"GET /api/v1/chat/sessions/3fe277a4-a292-4d68-968b-501584064396/messages","note":"gw"}
+ GET /api/v1/users/profile 200 in 546ms (next.js: 138ms, proxy.ts: 56ms, application-code: 352ms)
+{"t":"req","ts":"2026-10-22T16:13:08.454Z","reqId":"874d69a7-3a90-4d60-9145-67989c173562","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/chat/sessions/3fe277a4-a292-4d68-968b-501584064396/messages?limit=30 200 in 585ms (next.js: 284ms, proxy.ts: 67ms, application-code: 234ms)
+{"t":"req","ts":"2026-10-22T16:13:08.548Z","reqId":"da4e6819-10ef-4216-907a-4670250dfbf1","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/workspace 200 in 711ms (next.js: 161ms, proxy.ts: 63ms, application-code: 487ms)
+ GET /api/v1/chat/sessions 200 in 711ms (next.js: 181ms, proxy.ts: 63ms, application-code: 467ms)
+{"t":"req","ts":"2026-10-22T16:13:08.619Z","reqId":"9612aaa3-5138-427d-ac2e-8158256067cc","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 438ms (next.js: 42ms, proxy.ts: 62ms, application-code: 334ms)
+{"t":"req","ts":"2026-10-22T16:13:08.691Z","reqId":"30b52613-03b7-4c67-9294-9760b49bb2da","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 272ms (next.js: 107ms, proxy.ts: 27ms, application-code: 138ms)
+ GET /api/v1/models?kind=chat 200 in 277ms (next.js: 115ms, proxy.ts: 65ms, application-code: 98ms)
+ GET /api/v1/users/profile 200 in 169ms (next.js: 88ms, proxy.ts: 24ms, application-code: 57ms)
+ GET /api/v1/chat/sessions/3fe277a4-a292-4d68-968b-501584064396/messages?limit=30 200 in 434ms (next.js: 136ms, proxy.ts: 25ms, application-code: 272ms)
+ GET /api/v1/workspace 200 in 141ms (next.js: 50ms, proxy.ts: 43ms, application-code: 48ms)
+{"t":"req","ts":"2026-10-22T16:13:08.807Z","reqId":"d2f6e81b-ae16-4566-84c7-125abc8101b6","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 48ms (next.js: 8ms, proxy.ts: 12ms, application-code: 28ms)
+{"t":"req","ts":"2026-10-22T16:13:08.854Z","reqId":"f39561ec-e550-4e1e-96a3-fd4ba1e9055e","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 66ms (next.js: 21ms, proxy.ts: 11ms, application-code: 34ms)
+ GET /dashboard/chat/3ff6eca1-e0e9-42b1-98ef-1adeb47370fc 200 in 83ms (next.js: 20ms, application-code: 63ms)
+{"t":"req","ts":"2026-10-22T16:13:14.942Z","reqId":"c1fb1d68-ef9c-465d-bd54-46b4a167ca66","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:15.001Z","reqId":"5ead3e29-f7d1-47cb-9066-3e63e00b2ee8","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:15.015Z","reqId":"0083c4b3-c12d-4064-a3b3-71036e05ea27","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:15.021Z","reqId":"2179237b-ae00-4d4f-9925-969ffb0ed81d","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:15.048Z","reqId":"7f65e597-78ca-46da-b26f-ed043f80cda8","endpoint":"GET /api/v1/chat/sessions/3ff6eca1-e0e9-42b1-98ef-1adeb47370fc/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:15.052Z","reqId":"fbf73fe5-cf32-4b2a-ba7b-72bef407f93f","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 302ms (next.js: 116ms, proxy.ts: 48ms, application-code: 138ms)
+ GET /api/v1/users/profile 200 in 307ms (next.js: 149ms, proxy.ts: 40ms, application-code: 118ms)
+{"t":"req","ts":"2026-10-22T16:13:15.455Z","reqId":"16c7501d-337c-4566-b1d1-6198c87e6ece","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:15.472Z","reqId":"60e146e3-1269-4eeb-99d3-23c16fe19038","endpoint":"GET /api/v1/chat/sessions/3ff6eca1-e0e9-42b1-98ef-1adeb47370fc/messages","note":"gw"}
+ GET /api/v1/workspace 200 in 527ms (next.js: 96ms, proxy.ts: 52ms, application-code: 379ms)
+{"t":"req","ts":"2026-10-22T16:13:15.506Z","reqId":"6fb0de71-0060-4661-af9d-81b0d4443153","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 606ms (next.js: 115ms, proxy.ts: 17ms, application-code: 474ms)
+ GET /api/v1/chat/sessions 200 in 554ms (next.js: 165ms, proxy.ts: 18ms, application-code: 371ms)
+{"t":"req","ts":"2026-10-22T16:13:15.595Z","reqId":"cec7454b-712f-4aec-8d29-f9163a7defc4","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 317ms (next.js: 60ms, proxy.ts: 156ms, application-code: 101ms)
+{"t":"req","ts":"2026-10-22T16:13:15.624Z","reqId":"11394417-bc50-4d1e-b476-62a4a0689612","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 167ms (next.js: 53ms, proxy.ts: 14ms, application-code: 100ms)
+{"t":"req","ts":"2026-10-22T16:13:15.668Z","reqId":"fc9561c1-371d-488e-a3a4-ddec09e613d7","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/3ff6eca1-e0e9-42b1-98ef-1adeb47370fc/messages?limit=30 200 in 667ms (next.js: 298ms, proxy.ts: 21ms, application-code: 348ms)
+ GET /api/v1/models?kind=chat 200 in 201ms (next.js: 80ms, proxy.ts: 48ms, application-code: 73ms)
+ GET /api/v1/users/profile 200 in 145ms (next.js: 83ms, proxy.ts: 16ms, application-code: 46ms)
+ GET /api/v1/workspace 200 in 109ms (next.js: 65ms, proxy.ts: 15ms, application-code: 28ms)
+ GET /api/v1/chat/sessions/3ff6eca1-e0e9-42b1-98ef-1adeb47370fc/messages?limit=30 200 in 332ms (next.js: 160ms, proxy.ts: 38ms, application-code: 134ms)
+{"t":"req","ts":"2026-10-22T16:13:15.776Z","reqId":"23910f14-538a-45fa-a570-1296e89c6109","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 41ms (next.js: 11ms, proxy.ts: 8ms, application-code: 22ms)
+{"t":"req","ts":"2026-10-22T16:13:15.820Z","reqId":"3a859c03-e191-432c-8fda-eb3020a7ee9d","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 40ms (next.js: 10ms, proxy.ts: 8ms, application-code: 22ms)
+{"t":"req","ts":"2026-10-22T16:13:38.738Z","reqId":"50826f2e-1e6c-4b44-9e64-f6745670b405","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:39.467Z","reqId":"cbd87966-b6b1-4796-a162-c4841cbd608f","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":654,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 748ms (next.js: 9ms, proxy.ts: 9ms, application-code: 730ms)
+{"t":"req","ts":"2026-10-22T16:13:39.493Z","reqId":"11ba1cd8-9437-4f1a-afca-63c588ac4e44","endpoint":"GET /api/v1/chat/sessions/3ff6eca1-e0e9-42b1-98ef-1adeb47370fc/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:39.500Z","reqId":"055d5ccb-acd5-43c2-a444-bdcb41ae7277","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 66ms (next.js: 11ms, proxy.ts: 12ms, application-code: 42ms)
+{"t":"req","ts":"2026-10-22T16:13:39.567Z","reqId":"aad01606-cbc4-4a24-b0e3-75bd68056905","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/3ff6eca1-e0e9-42b1-98ef-1adeb47370fc/messages?limit=30 200 in 110ms (next.js: 41ms, proxy.ts: 12ms, application-code: 57ms)
+ GET /api/v1/workspace 200 in 41ms (next.js: 11ms, proxy.ts: 7ms, application-code: 23ms)
+ GET /dashboard 200 in 69ms (next.js: 29ms, application-code: 40ms)
+{"t":"req","ts":"2026-10-22T16:13:43.647Z","reqId":"ebe40fff-7ae1-4a3c-8c50-f4470da47aef","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:43.667Z","reqId":"78f72ee9-7e4b-4ebd-9114-96bb9ca724d4","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:43.697Z","reqId":"21254108-a93d-49a3-8bbf-02aa4257e654","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:43.703Z","reqId":"bcfc9599-1c9a-41be-8473-2537742346d7","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:43.711Z","reqId":"53d174a3-ec4b-4d65-86e2-06a8ae3dc964","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:43.714Z","reqId":"f83dc365-5756-419e-aeda-4effe7c1fa05","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 185ms (next.js: 78ms, proxy.ts: 14ms, application-code: 93ms)
+ GET /api/v1/users/profile 200 in 167ms (next.js: 83ms, proxy.ts: 28ms, application-code: 55ms)
+ GET /api/v1/models?kind=chat 200 in 167ms (next.js: 108ms, proxy.ts: 26ms, application-code: 33ms)
+{"t":"req","ts":"2026-10-22T16:13:43.859Z","reqId":"d1c791ad-3136-4528-8d1d-76ffd8866482","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/workspace 200 in 194ms (next.js: 71ms, proxy.ts: 27ms, application-code: 96ms)
+ GET /api/v1/chat/sessions 200 in 237ms (next.js: 74ms, proxy.ts: 12ms, application-code: 151ms)
+{"t":"req","ts":"2026-10-22T16:13:43.879Z","reqId":"4dbc0224-8628-43a2-ab48-5ee6dbaa0db4","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 213ms (next.js: 94ms, proxy.ts: 28ms, application-code: 91ms)
+ GET /api/v1/users/profile 200 in 69ms (next.js: 24ms, proxy.ts: 13ms, application-code: 31ms)
+ GET /api/v1/workspace 200 in 57ms (next.js: 24ms, proxy.ts: 13ms, application-code: 20ms)
+{"t":"req","ts":"2026-10-22T16:13:43.931Z","reqId":"9724f2c0-ef0a-4cf2-bf3c-bb5d341e2ef1","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 33ms (next.js: 7ms, proxy.ts: 6ms, application-code: 19ms)
+{"t":"req","ts":"2026-10-22T16:13:43.965Z","reqId":"ac7c631e-8553-4cc7-a6d5-b0ec275952b8","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 26ms (next.js: 5ms, proxy.ts: 5ms, application-code: 16ms)
+{"t":"req","ts":"2026-10-22T16:13:52.731Z","reqId":"bd36edce-5f9d-41ee-aa0d-404a7b14d1c9","endpoint":"POST /api/v1/chat/sessions","note":"gw"}
+ POST /api/v1/chat/sessions 201 in 36ms (next.js: 7ms, proxy.ts: 8ms, application-code: 21ms)
+{"t":"req","ts":"2026-10-22T16:13:52.769Z","reqId":"080e7249-bbaf-406e-8f2a-e871a8a5a657","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:52.815Z","reqId":"7eaa9435-a033-4c1b-bee7-662f78b84fac","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:52.817Z","reqId":"097c2d76-437c-432e-bafe-8ce79b103e13","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 45ms (next.js: 25ms, proxy.ts: 7ms, application-code: 13ms)
+ GET /api/v1/models?kind=chat 200 in 50ms (next.js: 15ms, proxy.ts: 6ms, application-code: 29ms)
+{"t":"req","ts":"2026-10-22T16:13:53.542Z","reqId":"22c2728a-088f-45a7-a6a7-875ebbe3fa54","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":651,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 786ms (next.js: 14ms, proxy.ts: 7ms, application-code: 764ms)
+{"t":"req","ts":"2026-10-22T16:13:53.560Z","reqId":"e4d1e428-7faa-47f6-9354-4bff94c57a55","endpoint":"GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:53.565Z","reqId":"902246d1-09fd-4998-93af-322f588501f8","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 188ms (next.js: 20ms, proxy.ts: 9ms, application-code: 159ms)
+{"t":"req","ts":"2026-10-22T16:13:53.774Z","reqId":"6ed8ffb3-5054-4c4b-aaf7-f0711b17cbad","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /dashboard/chat/c2980315-db07-45fb-9b83-5a15d29e3b46 200 in 194ms (next.js: 56ms, application-code: 138ms)
+{"t":"req","ts":"2026-10-22T16:13:53.998Z","reqId":"738714aa-9910-4e1f-897b-32299ee70a0f","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:54.004Z","reqId":"d50d842b-fc97-4527-8e4e-07cf8a2a34c6","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:54.011Z","reqId":"3eeee1be-9c17-44b2-852b-918a1824f108","endpoint":"GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:54.015Z","reqId":"d5003250-a8a8-40ff-8fe7-01c6db9c68b0","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+ GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages?limit=30 200 in 471ms (next.js: 65ms, proxy.ts: 9ms, application-code: 397ms)
+ GET /api/v1/workspace 200 in 295ms (next.js: 89ms, proxy.ts: 25ms, application-code: 181ms)
+{"t":"req","ts":"2026-10-22T16:13:54.049Z","reqId":"946c1a84-f114-4601-b5ed-0f976ff93fdc","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:54.136Z","reqId":"f4890247-2cec-494d-88c9-56e05cc2f19d","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 194ms (next.js: 76ms, proxy.ts: 30ms, application-code: 88ms)
+{"t":"req","ts":"2026-10-22T16:13:54.230Z","reqId":"e89cffad-07e8-4bc2-b58a-e4eba85d46b9","endpoint":"GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages","note":"gw"}
+ GET /api/v1/users/profile 200 in 211ms (next.js: 100ms, proxy.ts: 22ms, application-code: 89ms)
+ GET /api/v1/models?kind=chat 200 in 127ms (next.js: 70ms, proxy.ts: 15ms, application-code: 43ms)
+{"t":"req","ts":"2026-10-22T16:13:54.259Z","reqId":"2d21d61b-7c41-4f58-8733-2331dc6ca7dc","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 303ms (next.js: 60ms, proxy.ts: 31ms, application-code: 212ms)
+ GET /api/v1/chat/sessions 200 in 303ms (next.js: 94ms, proxy.ts: 32ms, application-code: 178ms)
+{"t":"req","ts":"2026-10-22T16:13:54.297Z","reqId":"af019a1c-f5bc-478d-8b39-9686c0cb0bd1","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:54.312Z","reqId":"88426569-d30a-4939-a90f-5f5d906d49f6","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:13:54.352Z","reqId":"e29e7175-3849-4eab-be10-d71ee00d8333","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages?limit=30 200 in 412ms (next.js: 168ms, proxy.ts: 32ms, application-code: 212ms)
+ GET /api/v1/models?kind=chat 200 in 238ms (next.js: 70ms, proxy.ts: 18ms, application-code: 150ms)
+ GET /api/v1/models?kind=chat 200 in 245ms (next.js: 116ms, proxy.ts: 23ms, application-code: 105ms)
+ GET /api/v1/workspace 200 in 235ms (next.js: 144ms, proxy.ts: 21ms, application-code: 70ms)
+ GET /api/v1/users/profile 200 in 226ms (next.js: 135ms, proxy.ts: 49ms, application-code: 42ms)
+{"t":"req","ts":"2026-10-22T16:13:54.541Z","reqId":"a2355432-f678-4d25-ba0f-87e427f86295","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages?limit=30 200 in 350ms (next.js: 131ms, proxy.ts: 32ms, application-code: 188ms)
+ GET /api/v1/workspace 200 in 52ms (next.js: 22ms, proxy.ts: 7ms, application-code: 23ms)
+{"t":"req","ts":"2026-10-22T16:13:54.597Z","reqId":"164391f3-87e6-477a-8dbf-bb07f67f6c5b","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 52ms (next.js: 14ms, proxy.ts: 8ms, application-code: 30ms)
+{"t":"req","ts":"2026-10-22T16:13:54.650Z","reqId":"12e9cfe1-f259-4176-87ab-d4f37c06964a","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 39ms (next.js: 9ms, proxy.ts: 6ms, application-code: 24ms)
+{"t":"req","ts":"2026-10-22T16:14:02.564Z","reqId":"202251b1-be6e-4582-a1da-58097e60147b","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:03.204Z","reqId":"c4f70c4b-bc13-4e4d-b671-cb5584ba5c9d","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":561,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 658ms (next.js: 12ms, proxy.ts: 6ms, application-code: 639ms)
+{"t":"req","ts":"2026-10-22T16:14:03.230Z","reqId":"f6ce152a-0459-4746-9ba7-6bca944a2ddc","endpoint":"GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:03.236Z","reqId":"5d37c68b-7e1b-4b13-92cc-a585177ca216","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 83ms (next.js: 18ms, proxy.ts: 13ms, application-code: 52ms)
+{"t":"req","ts":"2026-10-22T16:14:03.317Z","reqId":"2c86e765-1609-4343-b55b-b6e6c3d96d2e","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages?limit=30 200 in 131ms (next.js: 57ms, proxy.ts: 10ms, application-code: 64ms)
+ GET /api/v1/workspace 200 in 47ms (next.js: 12ms, proxy.ts: 5ms, application-code: 30ms)
+{"t":"req","ts":"2026-10-22T16:14:08.309Z","reqId":"7ef26de0-f9e2-4757-a185-2bcf55bea896","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:09.134Z","reqId":"24d77720-dcef-4aaa-a01a-93efdf1fd81c","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":771,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 836ms (next.js: 8ms, proxy.ts: 5ms, application-code: 822ms)
+{"t":"req","ts":"2026-10-22T16:14:09.151Z","reqId":"bd2df112-1eb3-4978-bba0-63276e7daf15","endpoint":"GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:09.157Z","reqId":"94c1bffd-1e45-49dd-8e34-24c191e9515d","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 68ms (next.js: 6ms, proxy.ts: 12ms, application-code: 50ms)
+{"t":"req","ts":"2026-10-22T16:14:09.222Z","reqId":"e4e1460d-f67f-4fa1-a46c-cc7e4765952d","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 40ms (next.js: 9ms, proxy.ts: 7ms, application-code: 24ms)
+ GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages?limit=30 200 in 116ms (next.js: 46ms, proxy.ts: 10ms, application-code: 60ms)
+{"t":"req","ts":"2026-10-22T16:14:24.701Z","reqId":"845c58dd-59d9-4c0f-994c-07ec55122563","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:25.733Z","reqId":"da3879b6-0594-4e1a-aedf-a2e7bead2434","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":976,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 1046ms (next.js: 8ms, proxy.ts: 6ms, application-code: 1032ms)
+{"t":"req","ts":"2026-10-22T16:14:25.757Z","reqId":"620c9078-80f5-48ae-bb32-64be62d9570f","endpoint":"GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:25.761Z","reqId":"8c96f33c-2193-4024-bc67-01b74819316a","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 95ms (next.js: 11ms, proxy.ts: 10ms, application-code: 74ms)
+{"t":"req","ts":"2026-10-22T16:14:25.860Z","reqId":"182b459d-27ea-470c-9b82-43a345d01a51","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages?limit=30 200 in 177ms (next.js: 64ms, proxy.ts: 11ms, application-code: 103ms)
+ GET /api/v1/workspace 200 in 80ms (next.js: 46ms, proxy.ts: 13ms, application-code: 21ms)
+{"t":"req","ts":"2026-10-22T16:14:33.153Z","reqId":"e85d6721-a074-4916-bd69-47181f93fff1","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:34.680Z","reqId":"f8db86ea-f996-485a-bff5-966aaafbca77","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":1475,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 1538ms (next.js: 8ms, proxy.ts: 6ms, application-code: 1525ms)
+{"t":"req","ts":"2026-10-22T16:14:34.696Z","reqId":"048a9572-2dd1-4885-aa01-cb6335eebd21","endpoint":"GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:34.710Z","reqId":"a4e690e6-1e3e-4a9c-93ce-7015d1072396","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 84ms (next.js: 11ms, proxy.ts: 10ms, application-code: 63ms)
+{"t":"req","ts":"2026-10-22T16:14:34.795Z","reqId":"5d889551-2eff-49f2-bcaa-c89405476bb2","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages?limit=30 200 in 119ms (next.js: 62ms, proxy.ts: 9ms, application-code: 48ms)
+ GET /api/v1/workspace 200 in 50ms (next.js: 16ms, proxy.ts: 8ms, application-code: 26ms)
+{"t":"req","ts":"2026-10-22T16:14:44.276Z","reqId":"e591777c-4bf5-472d-ac8b-d10b83d38b0b","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:46.277Z","reqId":"366494c8-64b5-4b02-8f62-fe0389541b45","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":1941,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 2.0s (next.js: 10ms, proxy.ts: 8ms, application-code: 1995ms)
+{"t":"req","ts":"2026-10-22T16:14:46.296Z","reqId":"845448dd-350e-445e-b162-e7f01ab7041d","endpoint":"GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:14:46.299Z","reqId":"96fb4a53-7172-44e9-8dc4-ba0c5345afaa","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 85ms (next.js: 16ms, proxy.ts: 9ms, application-code: 59ms)
+{"t":"req","ts":"2026-10-22T16:14:46.390Z","reqId":"a10c65c4-ec1f-47d8-abb4-8857c6bd8db9","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages?limit=30 200 in 173ms (next.js: 62ms, proxy.ts: 8ms, application-code: 103ms)
+ GET /api/v1/workspace 200 in 88ms (next.js: 52ms, proxy.ts: 11ms, application-code: 25ms)
+{"t":"req","ts":"2026-10-22T16:14:59.483Z","reqId":"73ad4145-419f-4505-a4cf-ec3a0b3f3676","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:00.399Z","reqId":"ac09ef81-7f78-4973-814b-d35b41c5c8b9","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":867,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 928ms (next.js: 9ms, proxy.ts: 5ms, application-code: 914ms)
+{"t":"req","ts":"2026-10-22T16:15:00.417Z","reqId":"577f822e-b434-4712-8b9d-bfdd01cfa675","endpoint":"GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:00.423Z","reqId":"37843c6f-7fe2-4779-afc7-f22fc53c1a5c","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 65ms (next.js: 8ms, proxy.ts: 13ms, application-code: 45ms)
+{"t":"req","ts":"2026-10-22T16:15:00.489Z","reqId":"fc40de12-afe2-4f49-947c-951dcd1720ee","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/c2980315-db07-45fb-9b83-5a15d29e3b46/messages?limit=30 200 in 117ms (next.js: 41ms, proxy.ts: 10ms, application-code: 66ms)
+ GET /api/v1/workspace 200 in 49ms (next.js: 9ms, proxy.ts: 8ms, application-code: 32ms)
+ GET /dashboard 200 in 54ms (next.js: 11ms, application-code: 43ms)
+{"t":"req","ts":"2026-10-22T16:15:09.329Z","reqId":"9c3bf0d6-a713-4e7e-ad30-1c82f54ed858","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:09.338Z","reqId":"91e89601-5d7d-4512-9f4c-c13e8cc6e13a","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:09.343Z","reqId":"5f5ad969-58e2-4cbe-9c10-40d5bb07b3cc","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:09.366Z","reqId":"6e8fe7ab-3ab8-4c20-9896-54faae0b3fe7","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:09.375Z","reqId":"27384f4d-d61b-46b1-bc1a-dad06117391c","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:09.380Z","reqId":"f883bb44-a4b4-4f81-b378-f5c2da48ad71","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 232ms (next.js: 93ms, proxy.ts: 48ms, application-code: 91ms)
+ GET /api/v1/models?kind=chat 200 in 171ms (next.js: 128ms, proxy.ts: 26ms, application-code: 17ms)
+ GET /api/v1/users/profile 200 in 228ms (next.js: 107ms, proxy.ts: 41ms, application-code: 80ms)
+ GET /api/v1/workspace 200 in 229ms (next.js: 103ms, proxy.ts: 56ms, application-code: 70ms)
+{"t":"req","ts":"2026-10-22T16:15:09.546Z","reqId":"974bf87c-cf71-4d0c-9bac-76e284368d2d","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 276ms (next.js: 76ms, proxy.ts: 50ms, application-code: 150ms)
+ GET /api/v1/chat/sessions 200 in 207ms (next.js: 113ms, proxy.ts: 22ms, application-code: 71ms)
+{"t":"req","ts":"2026-10-22T16:15:09.566Z","reqId":"45ba57d4-7f4b-4132-a8ff-f9c8d73e136e","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/users/profile 200 in 88ms (next.js: 38ms, proxy.ts: 11ms, application-code: 40ms)
+ GET /api/v1/workspace 200 in 81ms (next.js: 34ms, proxy.ts: 16ms, application-code: 30ms)
+{"t":"req","ts":"2026-10-22T16:15:09.644Z","reqId":"c40755e3-9290-4ae8-89b3-cf1beabbb75b","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 44ms (next.js: 13ms, proxy.ts: 11ms, application-code: 20ms)
+{"t":"req","ts":"2026-10-22T16:15:09.691Z","reqId":"a3a31524-38fb-4b5f-809f-a38c8ef5175b","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 42ms (next.js: 10ms, proxy.ts: 10ms, application-code: 21ms)
+{"t":"req","ts":"2026-10-22T16:15:13.824Z","reqId":"ecc88db7-37c0-4c58-96ae-fdfa52846e8c","endpoint":"POST /api/v1/chat/sessions","note":"gw"}
+ POST /api/v1/chat/sessions 201 in 39ms (next.js: 5ms, proxy.ts: 6ms, application-code: 28ms)
+{"t":"req","ts":"2026-10-22T16:15:13.866Z","reqId":"bafe89af-4f9c-4205-8ba8-4adcc163a927","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:13.910Z","reqId":"44ea3ab1-1478-4ba0-a431-92d1a98a9c47","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:13.913Z","reqId":"d89b0a54-a471-466c-98ab-5482906a2d7d","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 82ms (next.js: 13ms, proxy.ts: 34ms, application-code: 35ms)
+ GET /api/v1/models?kind=chat 200 in 57ms (next.js: 27ms, proxy.ts: 8ms, application-code: 22ms)
+{"t":"req","ts":"2026-10-22T16:15:14.932Z","reqId":"d136e37e-053a-4dcf-9247-6e7082d0290e","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":946,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 1077ms (next.js: 23ms, proxy.ts: 7ms, application-code: 1046ms)
+{"t":"req","ts":"2026-10-22T16:15:14.950Z","reqId":"445816c5-96d7-4e96-8a1c-b6dc5f33c462","endpoint":"GET /api/v1/chat/sessions/6a3edc8f-c64c-445c-9fd0-a9f4a87d2fb8/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:14.958Z","reqId":"003e1a50-179a-41e2-b89a-b242bd1f8d12","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 153ms (next.js: 10ms, proxy.ts: 15ms, application-code: 128ms)
+{"t":"req","ts":"2026-10-22T16:15:15.116Z","reqId":"06f29dcc-4471-4659-b352-2f4910d6ddbb","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/6a3edc8f-c64c-445c-9fd0-a9f4a87d2fb8/messages?limit=30 200 in 200ms (next.js: 44ms, proxy.ts: 11ms, application-code: 145ms)
+{"t":"req","ts":"2026-10-22T16:15:15.363Z","reqId":"a49ecf76-1443-46e1-9134-986d0ce420c6","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:15.382Z","reqId":"24d700dd-f738-4a18-b7a0-da54fe728edb","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:15.406Z","reqId":"53e469ff-494c-41fb-9492-257497213405","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:15.414Z","reqId":"e3c59114-037d-4f29-8194-6f8717322873","endpoint":"GET /api/v1/chat/sessions/6a3edc8f-c64c-445c-9fd0-a9f4a87d2fb8/messages","note":"gw"}
+ GET /dashboard/chat/6a3edc8f-c64c-445c-9fd0-a9f4a87d2fb8 200 in 453ms (next.js: 48ms, application-code: 405ms)
+ GET /api/v1/workspace 200 in 362ms (next.js: 60ms, proxy.ts: 18ms, application-code: 285ms)
+{"t":"req","ts":"2026-10-22T16:15:15.648Z","reqId":"212341dd-604e-4430-b837-822ce3cd8cac","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:15.673Z","reqId":"74b1a754-6bd7-49bc-933e-9eb4a9dfbe58","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 411ms (next.js: 159ms, proxy.ts: 83ms, application-code: 170ms)
+ GET /api/v1/users/profile 200 in 422ms (next.js: 198ms, proxy.ts: 84ms, application-code: 140ms)
+{"t":"req","ts":"2026-10-22T16:15:15.847Z","reqId":"065317c2-b006-4d89-bdb8-328a6ddb0045","endpoint":"GET /api/v1/chat/sessions/6a3edc8f-c64c-445c-9fd0-a9f4a87d2fb8/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:15.854Z","reqId":"37c06b98-5f74-4347-bab8-3b9ae313e511","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 558ms (next.js: 112ms, proxy.ts: 70ms, application-code: 376ms)
+ GET /api/v1/models?kind=chat 200 in 213ms (next.js: 128ms, proxy.ts: 14ms, application-code: 71ms)
+{"t":"req","ts":"2026-10-22T16:15:15.905Z","reqId":"0b985f24-9cdb-4652-8c9a-6987f687ba4c","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:15.930Z","reqId":"4b589dc4-653d-435c-b2b1-3f54ba4e5809","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 472ms (next.js: 35ms, proxy.ts: 191ms, application-code: 247ms)
+ GET /api/v1/models?kind=chat 200 in 130ms (next.js: 57ms, proxy.ts: 17ms, application-code: 56ms)
+{"t":"req","ts":"2026-10-22T16:15:15.974Z","reqId":"36b5b097-fa2d-4761-8561-de0b85a88c93","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 146ms (next.js: 47ms, proxy.ts: 22ms, application-code: 77ms)
+ GET /api/v1/chat/sessions/6a3edc8f-c64c-445c-9fd0-a9f4a87d2fb8/messages?limit=30 200 in 686ms (next.js: 348ms, proxy.ts: 73ms, application-code: 265ms)
+ GET /api/v1/workspace 200 in 157ms (next.js: 51ms, proxy.ts: 31ms, application-code: 75ms)
+ GET /api/v1/users/profile 200 in 121ms (next.js: 66ms, proxy.ts: 32ms, application-code: 23ms)
+{"t":"req","ts":"2026-10-22T16:15:16.079Z","reqId":"eb1656b3-bf7e-4d35-8df6-356a11196899","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/6a3edc8f-c64c-445c-9fd0-a9f4a87d2fb8/messages?limit=30 200 in 257ms (next.js: 153ms, proxy.ts: 25ms, application-code: 80ms)
+ GET /api/v1/workspace 200 in 51ms (next.js: 18ms, proxy.ts: 12ms, application-code: 22ms)
+{"t":"req","ts":"2026-10-22T16:15:16.131Z","reqId":"8d4d9630-484e-44e2-af07-ccaa20a2dd3b","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 42ms (next.js: 13ms, proxy.ts: 8ms, application-code: 20ms)
+{"t":"req","ts":"2026-10-22T16:15:16.176Z","reqId":"0337ce20-d070-44a5-bf99-a1b3db91c70c","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 41ms (next.js: 6ms, proxy.ts: 8ms, application-code: 27ms)
+{"t":"req","ts":"2026-10-22T16:15:22.386Z","reqId":"6c358864-2c79-4dd6-9e91-458f54344c3b","endpoint":"POST /api/chat/stream","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:23.263Z","reqId":"d86b072b-0f40-4f3f-b34c-ac9cc5f10926","ws":"6833cdce-03af-43c0-b02b-4c3909611dc9","endpoint":"chat","latencyMs":820,"status":200,"ok":true}
+ POST /api/chat/stream 200 in 892ms (next.js: 15ms, proxy.ts: 11ms, application-code: 866ms)
+{"t":"req","ts":"2026-10-22T16:15:23.280Z","reqId":"e22cf0f6-f8eb-4716-94b8-167f0d6a5e67","endpoint":"GET /api/v1/chat/sessions/6a3edc8f-c64c-445c-9fd0-a9f4a87d2fb8/messages","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:23.284Z","reqId":"17bfb3ed-234d-4819-ba6a-92f948f0f9c0","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 66ms (next.js: 10ms, proxy.ts: 10ms, application-code: 46ms)
+{"t":"req","ts":"2026-10-22T16:15:23.348Z","reqId":"a887e974-7a61-4413-8f25-88b9b2a6ca3c","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions/6a3edc8f-c64c-445c-9fd0-a9f4a87d2fb8/messages?limit=30 200 in 99ms (next.js: 43ms, proxy.ts: 8ms, application-code: 48ms)
+ GET /api/v1/workspace 200 in 37ms (next.js: 8ms, proxy.ts: 6ms, application-code: 23ms)
+ GET /dashboard/settings 200 in 207ms (next.js: 145ms, application-code: 62ms)
+{"t":"req","ts":"2026-10-22T16:15:39.425Z","reqId":"a902df1e-22f0-4861-a3b3-207d1d036a63","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:39.458Z","reqId":"d25232de-b8e7-475d-b97d-6b20dc219473","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:39.491Z","reqId":"00cf6c27-4795-4887-bd15-3d8760e3d383","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:39.496Z","reqId":"4d76aaae-e5a4-4bca-8902-3b1fa4bbb0c4","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:39.505Z","reqId":"7cf96000-57fe-4068-8ee7-6f8d73547f98","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:39.510Z","reqId":"439e361b-b6d4-48fa-be50-69b61661a9d4","endpoint":"GET /api/v1/sessions","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 324ms (next.js: 97ms, proxy.ts: 33ms, application-code: 194ms)
+ GET /api/v1/users/profile 200 in 354ms (next.js: 89ms, proxy.ts: 18ms, application-code: 246ms)
+ GET /api/v1/workspace 200 in 357ms (next.js: 77ms, proxy.ts: 32ms, application-code: 248ms)
+ GET /api/v1/chat/sessions 200 in 413ms (next.js: 91ms, proxy.ts: 19ms, application-code: 303ms)
+{"t":"req","ts":"2026-10-22T16:15:39.831Z","reqId":"d06958b8-2289-4c6e-86dc-5c47a4da7a4c","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:15:39.845Z","reqId":"4cc2b193-6e5b-4a7b-a3d5-2c4b22ea7538","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 389ms (next.js: 108ms, proxy.ts: 33ms, application-code: 248ms)
+{"t":"req","ts":"2026-10-22T16:15:39.871Z","reqId":"584a81e1-317d-491d-823d-96d6b5cc0a20","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/sessions 200 in 474ms (next.js: 251ms, proxy.ts: 31ms, application-code: 192ms)
+{"t":"req","ts":"2026-10-22T16:15:39.990Z","reqId":"7f4d1b1a-a1bc-41df-8fe6-488db48109cd","endpoint":"GET /api/v1/sessions","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 188ms (next.js: 86ms, proxy.ts: 30ms, application-code: 72ms)
+ GET /api/v1/users/profile 200 in 188ms (next.js: 93ms, proxy.ts: 36ms, application-code: 59ms)
+{"t":"req","ts":"2026-10-22T16:15:40.010Z","reqId":"caa1f4f4-da04-4ed2-b473-45866cc59c2a","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/workspace 200 in 177ms (next.js: 101ms, proxy.ts: 19ms, application-code: 57ms)
+{"t":"req","ts":"2026-10-22T16:15:40.043Z","reqId":"6c02963f-d010-40fa-8848-5402716cd2fa","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/sessions 200 in 131ms (next.js: 24ms, proxy.ts: 33ms, application-code: 73ms)
+ GET /api/v1/users/profile 200 in 90ms (next.js: 41ms, proxy.ts: 7ms, application-code: 41ms)
+{"t":"req","ts":"2026-10-22T16:15:40.103Z","reqId":"17ac8510-9d8d-4953-834b-18ed36e0bea4","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/workspace 200 in 77ms (next.js: 30ms, proxy.ts: 11ms, application-code: 36ms)
+{"t":"req","ts":"2026-10-22T16:15:40.144Z","reqId":"f6b4ab39-f191-492a-a0e2-bde28a05e813","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/users/profile 200 in 56ms (next.js: 16ms, proxy.ts: 9ms, application-code: 32ms)
+ GET /api/v1/workspace 200 in 46ms (next.js: 15ms, proxy.ts: 12ms, application-code: 19ms)
+ GET /dashboard 200 in 160ms (next.js: 59ms, application-code: 100ms)
+{"t":"req","ts":"2026-10-22T16:21:57.626Z","reqId":"1e11c83d-e44d-4de1-bc1d-cd4a5a5b9985","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:21:57.685Z","reqId":"7800fcec-0b3a-4dca-8aed-c80d35cb1d88","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:21:57.692Z","reqId":"f5439cbc-52e4-49c9-9588-9f0ba6152942","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:21:57.697Z","reqId":"934ec2ee-e59f-4b29-8971-bb6d0b14beea","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:21:57.705Z","reqId":"572c9715-d9cc-448f-8010-2281ff3eede9","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:21:57.711Z","reqId":"f109612e-97b3-4c65-a61a-f81d06888115","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 301ms (next.js: 100ms, proxy.ts: 41ms, application-code: 160ms)
+ GET /api/v1/users/profile 200 in 308ms (next.js: 113ms, proxy.ts: 39ms, application-code: 156ms)
+ GET /api/v1/workspace 200 in 315ms (next.js: 127ms, proxy.ts: 41ms, application-code: 147ms)
+ GET /api/v1/models?kind=chat 200 in 306ms (next.js: 200ms, proxy.ts: 38ms, application-code: 68ms)
+{"t":"req","ts":"2026-10-22T16:21:57.988Z","reqId":"f2ed2fdd-d269-4d4d-b9a7-a65d322ccd19","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:21:58.000Z","reqId":"513586a6-47d4-49c7-8dc0-443554df8302","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 414ms (next.js: 105ms, proxy.ts: 43ms, application-code: 266ms)
+ GET /api/v1/chat/sessions 200 in 376ms (next.js: 158ms, proxy.ts: 37ms, application-code: 180ms)
+ GET /api/v1/users/profile 200 in 117ms (next.js: 31ms, proxy.ts: 20ms, application-code: 66ms)
+ GET /api/v1/workspace 200 in 101ms (next.js: 53ms, proxy.ts: 11ms, application-code: 37ms)
+{"t":"req","ts":"2026-10-22T16:21:58.107Z","reqId":"3e9c5cdc-f93d-4de3-9a21-651383fed1ac","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 45ms (next.js: 15ms, proxy.ts: 10ms, application-code: 20ms)
+{"t":"req","ts":"2026-10-22T16:21:58.152Z","reqId":"5b47fbff-34a6-4772-a36f-7501f82e2582","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 34ms (next.js: 5ms, proxy.ts: 8ms, application-code: 20ms)
+✓ Compiled in 8.8s
+ GET /dashboard 200 in 299ms (next.js: 188ms, application-code: 111ms)
+✓ Finished writing to filesystem cache in 15.8s
+✓ Compiled in 6.7s
+✓ Compiled in 21.2s
+✓ Compiled in 821ms
+ GET /dashboard 200 in 610ms (next.js: 101ms, application-code: 509ms)
+ GET /dashboard 200 in 71ms (next.js: 8ms, application-code: 63ms)
+ GET /dashboard 200 in 131ms (next.js: 23ms, application-code: 108ms)
+{"t":"req","ts":"2026-10-22T16:29:20.223Z","reqId":"f00b365b-a577-4af5-8ae5-79651f896df3","endpoint":"GET /api/v1/auth/me","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:20.234Z","reqId":"00711b96-afaf-4536-aa56-390148880c4d","endpoint":"GET /api/v1/auth/me","note":"gw"}
+ GET /api/v1/auth/me 200 in 104ms (next.js: 49ms, proxy.ts: 14ms, application-code: 41ms)
+ GET /api/v1/auth/me 200 in 103ms (next.js: 20ms, proxy.ts: 17ms, application-code: 67ms)
+{"t":"req","ts":"2026-10-22T16:29:20.403Z","reqId":"aa1789ee-ae42-4297-89b9-357714130451","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:20.409Z","reqId":"ce3a799c-0ae8-4ac7-b6fe-bf5258181179","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:20.416Z","reqId":"38f0dafa-5b09-4fb1-8d86-2d8e888fb49d","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:20.425Z","reqId":"e3381fca-1dcc-4c8d-bcae-366284ef6459","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:20.439Z","reqId":"61f12c9d-f6aa-445e-8971-5bdfd8ac33dd","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:20.454Z","reqId":"cb5611de-e3df-4622-9339-54b25cd98659","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 173ms (next.js: 116ms, proxy.ts: 37ms, application-code: 20ms)
+ GET /api/v1/models?kind=chat 200 in 205ms (next.js: 109ms, proxy.ts: 42ms, application-code: 54ms)
+ GET /api/v1/users/profile 200 in 216ms (next.js: 94ms, proxy.ts: 24ms, application-code: 98ms)
+ GET /api/v1/chat/sessions 200 in 231ms (next.js: 82ms, proxy.ts: 22ms, application-code: 127ms)
+{"t":"req","ts":"2026-10-22T16:29:20.619Z","reqId":"b9f0eafd-3df6-45bc-9b37-406b0b2ab8c1","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/workspace 200 in 234ms (next.js: 106ms, proxy.ts: 29ms, application-code: 99ms)
+ GET /api/v1/chat/sessions 200 in 210ms (next.js: 117ms, proxy.ts: 24ms, application-code: 68ms)
+{"t":"req","ts":"2026-10-22T16:29:20.641Z","reqId":"60e7b25c-9dd4-464d-928f-e181fab71731","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/users/profile 200 in 74ms (next.js: 30ms, proxy.ts: 11ms, application-code: 34ms)
+ GET /api/v1/workspace 200 in 63ms (next.js: 24ms, proxy.ts: 18ms, application-code: 20ms)
+{"t":"req","ts":"2026-10-22T16:29:20.697Z","reqId":"a41f37ce-9f67-4098-ae00-9be868760a88","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 36ms (next.js: 8ms, proxy.ts: 7ms, application-code: 21ms)
+{"t":"req","ts":"2026-10-22T16:29:20.737Z","reqId":"4ea4b38f-8183-42ad-b84a-e20be02f63b7","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 32ms (next.js: 10ms, proxy.ts: 9ms, application-code: 13ms)
+ GET /dashboard/video 200 in 60ms (next.js: 23ms, application-code: 37ms)
+{"t":"req","ts":"2026-10-22T16:29:25.019Z","reqId":"1bcadfa1-c96d-40f3-9231-13dc9ca0a161","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:25.025Z","reqId":"f2dc75e0-72cf-4dfd-bf45-fb26c0992e7b","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:25.031Z","reqId":"54ff86b5-e6bd-4339-a4a4-29296a02a255","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:25.039Z","reqId":"2accab90-feff-4d60-b45f-becd921eb930","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:25.189Z","reqId":"e1b748af-5159-4c08-85be-881e91860331","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:25.192Z","reqId":"5a5ca42a-6289-44c1-af9b-de6e0895a01d","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/users/profile 200 in 209ms (next.js: 93ms, proxy.ts: 25ms, application-code: 91ms)
+{"t":"req","ts":"2026-10-22T16:29:25.245Z","reqId":"d054412c-40a0-4070-b31a-0c2450258315","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/workspace 200 in 243ms (next.js: 109ms, proxy.ts: 27ms, application-code: 107ms)
+ GET /api/v1/chat/sessions 200 in 258ms (next.js: 58ms, proxy.ts: 28ms, application-code: 171ms)
+ GET /api/v1/models?kind=video 200 in 79ms (next.js: 9ms, proxy.ts: 13ms, application-code: 57ms)
+ GET /api/v1/models?kind=video 200 in 85ms (next.js: 31ms, proxy.ts: 12ms, application-code: 41ms)
+ GET /api/v1/chat/sessions 200 in 255ms (next.js: 122ms, proxy.ts: 27ms, application-code: 106ms)
+{"t":"req","ts":"2026-10-22T16:29:25.272Z","reqId":"1be5868c-2b40-4e26-9d4e-79ed23672ca9","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/users/profile 200 in 90ms (next.js: 38ms, proxy.ts: 7ms, application-code: 45ms)
+ GET /api/v1/workspace 200 in 83ms (next.js: 36ms, proxy.ts: 16ms, application-code: 31ms)
+ GET /dashboard 200 in 35ms (next.js: 11ms, application-code: 25ms)
+{"t":"req","ts":"2026-10-22T16:29:28.271Z","reqId":"7c220a65-ec49-4f91-8d4d-438af6cba15e","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:28.283Z","reqId":"f14b314f-d168-483a-8203-cb4104b00db8","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:28.305Z","reqId":"a1e37362-e738-44ed-a1d5-9a4ab2bb9709","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:28.310Z","reqId":"ddf71c79-ef25-480b-bb42-3219b700512f","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:28.316Z","reqId":"79e5b2a2-2bab-4ec7-b911-f68a862bfa79","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:28.321Z","reqId":"3cc6442a-f4b5-416c-b86f-760321da6d44","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 161ms (next.js: 65ms, proxy.ts: 27ms, application-code: 69ms)
+ GET /api/v1/models?kind=chat 200 in 136ms (next.js: 68ms, proxy.ts: 24ms, application-code: 44ms)
+ GET /api/v1/users/profile 200 in 131ms (next.js: 71ms, proxy.ts: 22ms, application-code: 38ms)
+{"t":"req","ts":"2026-10-22T16:29:28.438Z","reqId":"95fa76cd-ae3c-43e9-b8e2-4f403deec14e","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/workspace 200 in 143ms (next.js: 81ms, proxy.ts: 23ms, application-code: 40ms)
+ GET /api/v1/chat/sessions 200 in 192ms (next.js: 60ms, proxy.ts: 20ms, application-code: 113ms)
+ GET /api/v1/chat/sessions 200 in 189ms (next.js: 63ms, proxy.ts: 41ms, application-code: 86ms)
+{"t":"req","ts":"2026-10-22T16:29:28.457Z","reqId":"4e987ded-e5b6-4603-8cf6-fcf255100b5c","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/users/profile 200 in 66ms (next.js: 29ms, proxy.ts: 9ms, application-code: 28ms)
+ GET /api/v1/workspace 200 in 53ms (next.js: 30ms, proxy.ts: 10ms, application-code: 14ms)
+{"t":"req","ts":"2026-10-22T16:29:28.507Z","reqId":"3a89d1a5-55c6-435c-bd23-63d38a3dd01d","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 23ms (next.js: 6ms, proxy.ts: 7ms, application-code: 10ms)
+{"t":"req","ts":"2026-10-22T16:29:28.532Z","reqId":"6b5f7a25-e460-4067-9a48-a6a988a83585","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 36ms (next.js: 7ms, proxy.ts: 6ms, application-code: 23ms)
+ GET /dashboard 200 in 95ms (next.js: 19ms, application-code: 76ms)
+{"t":"req","ts":"2026-10-22T16:29:31.050Z","reqId":"20058f34-f3cd-4e16-a3a1-697358b6265f","endpoint":"GET /api/v1/auth/me","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:31.055Z","reqId":"6bbe80c2-a61a-42ee-b792-bed2bb3146ba","endpoint":"GET /api/v1/auth/me","note":"gw"}
+ GET /api/v1/auth/me 200 in 97ms (next.js: 23ms, proxy.ts: 28ms, application-code: 47ms)
+ GET /api/v1/auth/me 200 in 87ms (next.js: 44ms, proxy.ts: 20ms, application-code: 23ms)
+{"t":"req","ts":"2026-10-22T16:29:31.177Z","reqId":"183c95da-deb0-4e92-ab5f-ef45c77335f1","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:31.184Z","reqId":"0dac4619-afb8-4ac2-bec6-54f2203663bd","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:31.189Z","reqId":"c9e04b55-e2c0-4847-b730-76bb9860fbea","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:31.192Z","reqId":"6bb414d1-9648-4b81-a8b8-4af16a626ef6","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:31.198Z","reqId":"b1b872b8-dbad-4dbe-a323-21f7b071a08d","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:29:31.202Z","reqId":"d5331b54-7f65-49fa-bf95-c3e184b1025e","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 204ms (next.js: 71ms, proxy.ts: 34ms, application-code: 99ms)
+ GET /api/v1/users/profile 200 in 202ms (next.js: 81ms, proxy.ts: 33ms, application-code: 88ms)
+ GET /api/v1/models?kind=chat 200 in 196ms (next.js: 122ms, proxy.ts: 31ms, application-code: 43ms)
+{"t":"req","ts":"2026-10-22T16:29:31.373Z","reqId":"09429262-a2cb-4be8-ab50-9328990f7101","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/workspace 200 in 215ms (next.js: 94ms, proxy.ts: 30ms, application-code: 91ms)
+ GET /api/v1/chat/sessions 200 in 235ms (next.js: 56ms, proxy.ts: 33ms, application-code: 146ms)
+ GET /api/v1/chat/sessions 200 in 226ms (next.js: 105ms, proxy.ts: 32ms, application-code: 89ms)
+{"t":"req","ts":"2026-10-22T16:29:31.397Z","reqId":"c80b6860-fd9c-4043-acd0-1228ea9b46c0","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/users/profile 200 in 71ms (next.js: 29ms, proxy.ts: 12ms, application-code: 31ms)
+ GET /api/v1/workspace 200 in 54ms (next.js: 18ms, proxy.ts: 11ms, application-code: 25ms)
+{"t":"req","ts":"2026-10-22T16:29:31.449Z","reqId":"badd7542-2149-4ff4-8733-5d8796a2d470","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 27ms (next.js: 7ms, proxy.ts: 6ms, application-code: 15ms)
+{"t":"req","ts":"2026-10-22T16:29:31.478Z","reqId":"bdd5dfbc-d85c-4b6a-9e37-3a1ac83d3944","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 36ms (next.js: 11ms, proxy.ts: 6ms, application-code: 19ms)
+ GET /dashboard/image 200 in 72ms (next.js: 34ms, application-code: 38ms)
+{"t":"req","ts":"2026-10-22T16:30:48.261Z","reqId":"4ac36d5d-cd30-498a-9476-7ce7a415d5ad","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:48.284Z","reqId":"45d3d63b-4369-47a6-a5ed-4fa977c85346","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:48.290Z","reqId":"7a297c4e-dbd8-4609-925c-d859a8b1bd1a","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:48.535Z","reqId":"25dbe594-7968-480a-a42b-c52895d33d02","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/users/profile 200 in 417ms (next.js: 349ms, proxy.ts: 25ms, application-code: 43ms)
+ GET /api/v1/chat/sessions 200 in 441ms (next.js: 328ms, proxy.ts: 15ms, application-code: 98ms)
+ GET /api/v1/chat/sessions 200 in 447ms (next.js: 339ms, proxy.ts: 32ms, application-code: 76ms)
+ GET /api/v1/workspace 200 in 415ms (next.js: 114ms, proxy.ts: 256ms, application-code: 44ms)
+{"t":"req","ts":"2026-10-22T16:30:48.711Z","reqId":"4376a119-0b8a-4a16-ad96-b009fe2bb64c","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:48.751Z","reqId":"c3e32656-3e4f-4e53-b2d4-3191eccbb3af","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:48.760Z","reqId":"f73ae50a-adde-45ea-8c92-61684e4e7195","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:48.784Z","reqId":"193fc6d3-147e-400f-98d8-373afc23dfc5","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/users/profile 200 in 154ms (next.js: 54ms, proxy.ts: 21ms, application-code: 79ms)
+ GET /api/v1/models?kind=image 200 in 98ms (next.js: 53ms, proxy.ts: 8ms, application-code: 38ms)
+ GET /api/v1/models?kind=image 200 in 103ms (next.js: 47ms, proxy.ts: 29ms, application-code: 27ms)
+ GET /api/v1/workspace 200 in 146ms (next.js: 44ms, proxy.ts: 35ms, application-code: 66ms)
+ GET /dashboard 200 in 40ms (next.js: 13ms, application-code: 28ms)
+{"t":"req","ts":"2026-10-22T16:30:54.028Z","reqId":"b6317637-1e9f-4402-8dd6-9a94f26bdc86","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:54.032Z","reqId":"0fbfd110-7765-4387-852d-9c7e993bd38d","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:54.037Z","reqId":"8f464a16-95ab-4476-bde2-93a57b149649","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:54.043Z","reqId":"809cb755-49a5-446e-af45-018da38ce931","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:54.047Z","reqId":"7ab02e21-8186-45a3-b162-3673679898c5","endpoint":"GET /api/v1/workspace","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:30:54.053Z","reqId":"8fb4d05e-6578-4948-8459-36687e05dd56","endpoint":"GET /api/v1/models","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 123ms (next.js: 42ms, proxy.ts: 28ms, application-code: 52ms)
+ GET /api/v1/users/profile 200 in 120ms (next.js: 49ms, proxy.ts: 32ms, application-code: 39ms)
+ GET /api/v1/models?kind=chat 200 in 90ms (next.js: 63ms, proxy.ts: 6ms, application-code: 21ms)
+ GET /api/v1/workspace 200 in 128ms (next.js: 54ms, proxy.ts: 32ms, application-code: 41ms)
+{"t":"req","ts":"2026-10-22T16:30:54.146Z","reqId":"203aef91-28a4-4efa-b62a-02309524f48b","endpoint":"GET /api/v1/users/profile","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 143ms (next.js: 44ms, proxy.ts: 31ms, application-code: 68ms)
+{"t":"req","ts":"2026-10-22T16:30:54.156Z","reqId":"e7eabbcd-d35e-4215-877b-8b842becd411","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/chat/sessions 200 in 158ms (next.js: 34ms, proxy.ts: 27ms, application-code: 96ms)
+ GET /api/v1/users/profile 200 in 52ms (next.js: 18ms, proxy.ts: 12ms, application-code: 21ms)
+ GET /api/v1/workspace 200 in 43ms (next.js: 19ms, proxy.ts: 9ms, application-code: 15ms)
+{"t":"req","ts":"2026-10-22T16:30:54.197Z","reqId":"57ecd578-2c13-4fec-8101-70f1cad4cec0","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 20ms (next.js: 4ms, proxy.ts: 5ms, application-code: 12ms)
+{"t":"req","ts":"2026-10-22T16:30:54.219Z","reqId":"3ef7e410-d364-4631-8147-c79f556be006","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 21ms (next.js: 5ms, proxy.ts: 6ms, application-code: 10ms)
+ GET /dashboard 200 in 190ms (next.js: 21ms, application-code: 168ms)
+{"t":"req","ts":"2026-10-22T16:31:23.048Z","reqId":"efd4af77-1c42-4332-95d7-ca74e93f9d30","endpoint":"GET /api/v1/auth/me","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:31:23.060Z","reqId":"c9f307fe-5d3c-40d6-97c6-648d4c784aef","endpoint":"GET /api/v1/auth/me","note":"gw"}
+ GET /api/v1/auth/me 200 in 130ms (next.js: 47ms, proxy.ts: 27ms, application-code: 56ms)
+ GET /api/v1/auth/me 200 in 129ms (next.js: 67ms, proxy.ts: 29ms, application-code: 32ms)
+{"t":"req","ts":"2026-10-22T16:31:23.269Z","reqId":"3299809b-2c45-4547-a5d7-f1b5904cffc6","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:31:23.285Z","reqId":"5414c9ca-a677-4573-a9fa-21a6a06f9d48","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:31:23.300Z","reqId":"03dde044-3a4c-41dc-ac7e-53eb2fc410dc","endpoint":"GET /api/v1/chat/sessions","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:31:23.305Z","reqId":"c81d5ad8-9d07-4789-b061-a34960a3b644","endpoint":"GET /api/v1/models","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:31:23.326Z","reqId":"6f3e570b-1efb-4bd5-97bf-408546a9ab89","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:31:23.328Z","reqId":"573ce18f-6d4c-4e54-a374-862b0cec90fc","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/models?kind=chat 200 in 187ms (next.js: 85ms, proxy.ts: 48ms, application-code: 54ms)
+ GET /api/v1/models?kind=chat 200 in 198ms (next.js: 67ms, proxy.ts: 43ms, application-code: 88ms)
+ GET /api/v1/users/profile 200 in 149ms (next.js: 86ms, proxy.ts: 16ms, application-code: 47ms)
+ GET /api/v1/chat/sessions 200 in 210ms (next.js: 77ms, proxy.ts: 43ms, application-code: 90ms)
+ GET /api/v1/chat/sessions 200 in 242ms (next.js: 68ms, proxy.ts: 46ms, application-code: 128ms)
+ GET /api/v1/workspace 200 in 165ms (next.js: 99ms, proxy.ts: 16ms, application-code: 51ms)
+{"t":"req","ts":"2026-10-22T16:31:23.482Z","reqId":"414cbc58-2edf-4956-ac9d-ae4608cf7efa","endpoint":"GET /api/v1/users/profile","note":"gw"}
+{"t":"req","ts":"2026-10-22T16:31:23.493Z","reqId":"5f911131-d81f-46a6-9afd-303e07c9889e","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/users/profile 200 in 75ms (next.js: 19ms, proxy.ts: 21ms, application-code: 35ms)
+ GET /api/v1/workspace 200 in 61ms (next.js: 25ms, proxy.ts: 11ms, application-code: 26ms)
+{"t":"req","ts":"2026-10-22T16:31:23.555Z","reqId":"eb3a44dd-6ace-4db5-8520-72b88a82ef02","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 34ms (next.js: 7ms, proxy.ts: 9ms, application-code: 18ms)
+{"t":"req","ts":"2026-10-22T16:31:23.589Z","reqId":"1591aa64-e10b-4c52-a2e4-3b968b83160e","endpoint":"GET /api/v1/workspace","note":"gw"}
+ GET /api/v1/workspace 200 in 44ms (next.js: 21ms, proxy.ts: 6ms, application-code: 17ms)
+✓ Compiled in 560ms
+ GET /dashboard 200 in 122ms (next.js: 38ms, application-code: 84ms)
+✓ Compiled in 632ms
+✓ Compiled in 432ms
+ GET /dashboard 200 in 77ms (next.js: 28ms, application-code: 49ms)
+✓ Compiled in 284ms
+ GET /dashboard 200 in 62ms (next.js: 19ms, application-code: 43ms)

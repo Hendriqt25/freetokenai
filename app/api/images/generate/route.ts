@@ -61,7 +61,11 @@ export async function POST(req: Request) {
     }
     try {
       const cost = (await modelCost("image", finalModel)) ?? imageCost(finalModel);
-      return await withTokens(wsId, cost, run, { modelId: finalModel, endpointType: "image" });
+      return await withTokens(wsId, cost, run, {
+        modelId: finalModel,
+        endpointType: "image",
+        units: finalCount,
+      });
     } catch (e) {
       if (e instanceof InsufficientTokensError) return insufficient(e.balance, "image");
       throw e;

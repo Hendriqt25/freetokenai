@@ -14,6 +14,14 @@ export function notifySettingsChanged() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(SETTINGS_CHANGED));
 }
 
+// ponytail: saldo Token dipotong server saat submit (chat/media); panggil ini
+// begitu request diterima supaya TopBar refetch saldo saat itu juga.
+export const WORKSPACE_CHANGED = "ftai:workspace-changed";
+
+export function notifyWorkspaceChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(WORKSPACE_CHANGED));
+}
+
 export type UserProfile = { name: string; contact: string; avatarUrl: string | null };
 
 // ponytail: default SSR-safe — nilai yang sama dirender server DAN saat hydrate,
@@ -86,7 +94,7 @@ export async function fetchWorkspace(): Promise<WorkspaceInfo> {
   const data = await api<{ workspace: { token_balance: number; expires_at: string } }>(
     "/api/v1/workspace",
   );
-  if (!data) return { tokenBalance: 1500, expiresAt: "", expiresAtLabel: "27 September" };
+  if (!data) return { tokenBalance: 1500, expiresAt: "", expiresAtLabel: "" };
   const d = new Date(data.workspace.expires_at);
   return {
     tokenBalance: data.workspace.token_balance,

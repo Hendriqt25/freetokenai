@@ -13,6 +13,8 @@ import {
   subscribeMediaJobs,
   type MediaJobState,
 } from "@/lib/media-jobs";
+import ModelPicker from "./ModelPicker";
+import PillSelect from "./PillSelect";
 
 type Kind = "image" | "video";
 
@@ -29,7 +31,7 @@ const CONFIG: Record<
     placeholder: "Tuliskan prompt kamu…",
     models: [
       { id: "nano-banana-2", credits: 3 },
-      { id: "nano-banana-pro", credits: 3 },
+      { id: "nano-banana-pro", credits: 50 },
       { id: "qwen-image", credits: 3 },
     ],
     ratios: ["1:1", "16:9", "9:16"],
@@ -50,7 +52,7 @@ const CONFIG: Record<
     models: [
       { id: "veo-3.1-lite", credits: 5 },
       { id: "veo-3.1-fast", credits: 40 },
-      { id: "veo-3.1-quality", credits: 220 },
+      { id: "veo-3.1-quality", credits: 200 },
     ],
     ratios: ["1:1", "16:9", "9:16"],
     examples: [
@@ -127,12 +129,18 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
   useEffect(() => {
     setHistory(loadMediaHistory(kind));
     setPrompt("");
-    setModel(models[0]?.id ?? CONFIG[kind].models[0].id);
-    setRatio(CONFIG[kind].ratios[0]);
     setPending(listMediaJobs(kind));
     setError(getMediaJobsError());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
+
+  // ponytail: ganti kind -> model ikut model pertama dari katalog jenis itu
+  // (bukan sisa model jenis lain) supaya biaya Token yang tampil benar.
+  useEffect(() => {
+    setModel(catalogModels[0]?.id ?? CONFIG[kind].models[0].id);
+    setRatio(CONFIG[kind].ratios[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, catalogModels]);
 
   // ponytail: refresh saat job latar selesai / ada update — walau user sempat pindah page.
   useEffect(() => {
@@ -297,50 +305,28 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
       <div className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6 md:pb-5">
         <div className="mx-auto w-full max-w-3xl rounded-2xl border border-neutral-200 bg-neutral-50 p-3 shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <ModelPicker
+              models={models.map((m) => ({ id: m.id, label: m.label ?? m.id, cost: m.credits, provider: m.provider }))}
               value={model}
-              onChange={(e) => changeModel(e.target.value)}
-              className="rounded-lg bg-white px-2 py-1.5 text-xs font-medium text-neutral-700 outline-none dark:bg-neutral-800 dark:text-neutral-200"
-            >
-              {models.map((m) => (
-                <option key={`${m.provider ?? "model"}-${m.id}`} value={m.id}>
-                  {m.label ?? m.id}
-                </option>
-              ))}
-            </select>
-            <label className="relative flex items-center">
-              <select
-                value={ratio}
-                onChange={(e) => setRatio(e.target.value)}
-                aria-label="Rasio"
-                className="appearance-none rounded-lg bg-white py-1.5 pl-2 pr-7 text-xs font-medium text-neutral-700 outline-none dark:bg-neutral-800 dark:text-neutral-200"
-              >
-                {cfg.ratios.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={12}
-                className="pointer-events-none absolute right-2 text-neutral-500 dark:text-neutral-400"
-              />
-            </label>
+              onChange={changeModel}
+              priceNote={kind === "image" && count > 1 ? `per gambar, total ${credits} untuk ${count}×` : "per gambar"}
+            />
+            <PillSelect value={ratio} options={cfg.ratios} onChange={setRatio} label="Rasio" />
             {kind === "image" && (
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setSettingsOpen((o) => !o)}
                   aria-expanded={settingsOpen}
-                  className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-neutral-500 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800"
+                  className="flex h-9 items-center gap-1 rounded-full border border-neutral-200 pl-3 pr-2 text-xs text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
                   Pengaturan
                   <ChevronDown size={12} className={`transition ${settingsOpen ? "rotate-180" : ""}`} />
                 </button>
                 {settingsOpen && (
                   <>
-                    <div className="fixed inset-0 z-10" onClick={() => setSettingsOpen(false)} aria-hidden="true" />
-                    <div className="absolute bottom-full left-0 z-20 mb-2 w-[calc(100vw-3rem)] max-w-64 rounded-xl border border-neutral-200 bg-white p-3 shadow-xl dark:border-neutral-700 dark:bg-neutral-900">
+                    <div className="fixed inset-0 z-[90]" onClick={() => setSettingsOpen(false)} aria-hidden="true" />
+                    <div className="fixed bottom-24 left-4 z-[100] w-[calc(100vw-2rem)] max-w-64 rounded-xl border border-neutral-200 bg-white p-3 shadow-2xl sm:left-1/2 sm:-translate-x-1/2 dark:border-neutral-700 dark:bg-neutral-900">
                       <p className="mb-1.5 text-xs font-medium text-neutral-900 dark:text-white">Gaya gambar</p>
                       <div className="mb-3 flex flex-wrap gap-1.5">
                         {IMAGE_STYLES.map((s) => (
@@ -379,7 +365,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
             <button
               type="button"
               onClick={fillRandom}
-              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-neutral-500 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800"
+              className="flex h-9 items-center gap-1 rounded-full border border-neutral-200 pl-3 pr-2 text-xs text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
               <Dices size={12} />
               Ide acak
@@ -413,7 +399,8 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
 
           <div className="mt-1 flex items-center justify-between px-1 text-xs text-neutral-500 dark:text-neutral-400">
             <span>
-              {credits} kredit{kind === "image" && style !== IMAGE_STYLES[0] ? ` · ${style}` : ""}
+              {credits} Token{kind === "image" && count > 1 ? ` (${count}×)` : ""}
+              {kind === "image" && style !== IMAGE_STYLES[0] ? ` · ${style}` : ""}
             </span>
             <span>
               {prompt.length} / {MAX_LEN.toLocaleString("id-ID")}

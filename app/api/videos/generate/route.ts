@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { startGeminiVideo } from "@/lib/ai-media";
 import { resolveRoute } from "@/lib/ai-router";
-import { mapAspect, vioFetch } from "@/lib/vio";
+import { mapAspect, vioFetch, vioUploadAsset } from "@/lib/vio";
 import { evaluateAiRequest, gatekeeperAccessResponse, gatekeeperBlockResponse } from "@/lib/gatekeeper";
 import { isModelAllowed, modelCost } from "@/lib/model-registry";
 import {
@@ -89,12 +89,10 @@ export async function POST(req: Request) {
           motion_bucket_id: motion === "high" ? 127 : motion === "low" ? 1 : 64, // rough mapping
           fps,
         };
-        if (imageFile) {
-          // Vio i2v: upload image first or include as base64? API may need image_url
-          // For now, convert to base64
-          const arrayBuffer = await imageFile.arrayBuffer();
-          const base64 = Buffer.from(arrayBuffer).toString("base64");
-          vioBody.image = `data:${imageFile.type};base64,${base64}`;
+        // Vio i2v: unggah gambar jadi aset dulu, kirim asset_id sbg start frame.
+        if (mode === "i2v" && imageFile) {
+          const assetId = await vioUploadAsset(imageFile, imageFile.name || "reference.png");
+          vioBody.start_frame_asset_id = assetId;
         }
         const { status, data } = await vioFetch("/videos/generate", {
           method: "POST",

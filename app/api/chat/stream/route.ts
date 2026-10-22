@@ -80,6 +80,19 @@ export async function POST(req: Request) {
       { status: 400 },
     );
 
+  const history = Array.isArray(body.history) ? body.history : [];
+  const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 64) : "";
+  const attachmentIds = Array.isArray(body.attachment_ids)
+    ? body.attachment_ids
+        .filter((id): id is string => typeof id === "string")
+        .map((id) => id.slice(0, 64))
+        .slice(0, 5)
+    : [];
+
+  // Gatekeeper: bila diblokir, balas SEKARANG. Bila user login, giliran (user +
+  // jawaban penolakan) disimpan lalu dikirim sebagai frame SSE `done` — bukan
+  // error HTTP — supaya tampil seketika dan tetap ada setelah reload. (Sebelumnya
+  // error HTTP hilang saat sesi baru hydrate dari DB, baru muncul di prompt berikutnya.)
   if (!isContinue) {
     const gateInput = [
       message,
@@ -90,8 +103,43 @@ export async function POST(req: Request) {
             .map((item) => String(item.content ?? "").slice(0, 8000))
         : []),
     ].join("\n");
-    const gate = gatekeeperBlockResponse(evaluateAiRequest(gateInput, "chat"));
-    if (gate) return gate;
+    const gate = evaluateAiRequest(gateInput, "chat");
+    if (gate.decision !== "ALLOW") {
+      // DB bisa sedang off -> jangan gagal hanya karena penolakan; fallback ke HTTP.
+      const gateWs = await workspaceIdForRequest(req).catch(() => null);
+      if (gateWs) {
+        try {
+          const gturn = await startChatTurn({ workspaceId: gateWs, sessionId, userText: message, attachmentIds });
+          const assistantMessageId = await finishAssistantTurn({
+            workspaceId: gateWs,
+            sessionId: gturn.sessionId,
+            reply: gate.user_message,
+            finishReason: "error",
+          });
+          const payload =
+            `data: ${JSON.stringify({ text: gate.user_message })}\n\n` +
+            `data: ${JSON.stringify({
+              done: true,
+              totalTokens: 0,
+              finishReason: "error",
+              sessionId: gturn.sessionId,
+              assistantMessageId,
+            })}\n\n`;
+          return new Response(payload, {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+            },
+          });
+        } catch (e) {
+          if (e instanceof ChatTurnError)
+            return NextResponse.json({ error: { code: e.code, message: e.message } }, { status: e.status });
+          // persistensi gagal -> tetap beri tahu user lewat HTTP
+        }
+      }
+      return gatekeeperBlockResponse(gate)!;
+    }
   }
 
   const model = String(body.model ?? GEMINI_DEFAULT).slice(0, 80);
@@ -107,15 +155,6 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-
-  const history = Array.isArray(body.history) ? body.history : [];
-  const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 64) : "";
-  const attachmentIds = Array.isArray(body.attachment_ids)
-    ? body.attachment_ids
-        .filter((id): id is string => typeof id === "string")
-        .map((id) => id.slice(0, 64))
-        .slice(0, 5)
-    : [];
 
   const wsId = await workspaceIdForRequest(req);
   if (!wsId && process.env.NODE_ENV === "production")
@@ -206,6 +245,12 @@ export async function POST(req: Request) {
     route.family,
   );
   const system = SYSTEM_ID + documentPrompt;
+  // ponytail: prompt (system + dokumen + history + pesan) ikut ditagih per 1k token,
+  // jadi kirim panjang ~2x lebih mahal — sesuai perilaku provider.
+  const inputChars =
+    system.length +
+    providerMessage.length +
+    historyForApi.reduce((n, h) => n + String(h.content ?? "").length, 0);
 
   const encoder = new TextEncoder();
   let usageId: string | undefined;
@@ -271,6 +316,7 @@ export async function POST(req: Request) {
           },
           { modelId: model, endpointType: "chat", onUsageLogged: (id) => { usageId = id; } },
           req.signal,
+          inputChars,
         );
 
         const finishReason = normalizeFinish(result.finishReason);

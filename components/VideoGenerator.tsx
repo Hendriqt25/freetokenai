@@ -13,6 +13,8 @@ import {
   subscribeMediaJobs,
   type MediaJobState,
 } from "@/lib/media-jobs";
+import ModelPicker from "./ModelPicker";
+import PillSelect from "./PillSelect";
 
 type VideoMode = "t2v" | "i2v";
 
@@ -49,6 +51,9 @@ const EXAMPLES_I2V = [
 
 const MAX_LEN = 5000;
 
+// Vio menolak prompt kosong walau mode i2v, jadi beri gerakan default yang aman.
+const DEFAULT_I2V_PROMPT = "Gerakan kamera halus dan natural, subjek bergerak perlahan";
+
 type FeedItem = { url: string; prompt: string; model: string; session: MediaSession; mode?: VideoMode };
 
 function timeAgo(iso: string): string {
@@ -76,6 +81,8 @@ export default function VideoGenerator() {
   const [mode, setMode] = useState<VideoMode>("t2v");
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
   const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
+  const [imageError, setImageError] = useState("");
+  const [dragging, setDragging] = useState(false);
   const [catalogModels, setCatalogModels] = useState<{ id: string; label?: string; credits: number; provider?: string }[]>(VIDEO_MODELS);
   const [history, setHistory] = useState<MediaSession[]>([]);
   const [pending, setPending] = useState<MediaJobState[]>(() => listMediaJobs("video"));
@@ -96,6 +103,7 @@ export default function VideoGenerator() {
       fetchCatalogModels("video").then((list) => {
         if (!alive) return;
         setCatalogModels(list.map((m) => ({ id: m.id, label: m.label, credits: m.cost, provider: m.provider })));
+        if (list.length) setModel((cur) => (list.some((m) => m.id === cur) ? cur : list[0].id));
       }),
     );
     return () => { alive = false; };
@@ -174,32 +182,46 @@ export default function VideoGenerator() {
     setSelected(null);
   }
 
-  function handleReferenceImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  function applyReferenceFile(file: File | undefined | null) {
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      alert("Format gambar harus JPG, PNG, atau WebP");
+      setImageError("Format gambar harus JPG, PNG, atau WebP.");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      alert("Ukuran gambar maksimal 10 MB");
+      setImageError("Ukuran gambar maksimal 10 MB.");
       return;
     }
+    if (referenceImagePreview) URL.revokeObjectURL(referenceImagePreview);
+    setImageError("");
     setReferenceImage(file);
     setReferenceImagePreview(URL.createObjectURL(file));
   }
 
+  function handleReferenceImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    applyReferenceFile(e.target.files?.[0]);
+    e.target.value = "";
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLElement>) {
+    e.preventDefault();
+    setDragging(false);
+    applyReferenceFile(e.dataTransfer.files?.[0]);
+  }
+
   function removeReferenceImage() {
+    if (referenceImagePreview) URL.revokeObjectURL(referenceImagePreview);
     setReferenceImage(null);
     setReferenceImagePreview(null);
+    setImageError("");
   }
 
   async function handleCreate() {
     if (!valid) return;
-    const sent = prompt.trim();
+    const sent = prompt.trim() || (mode === "i2v" ? DEFAULT_I2V_PROMPT : "");
     const styledPrompt = sent;
     setPrompt("");
-    if (mode === "i2v") setReferenceImage(null), setReferenceImagePreview(null);
+    if (mode === "i2v") removeReferenceImage();
     clearMediaJobsError();
     setError("");
 
@@ -317,76 +339,30 @@ export default function VideoGenerator() {
       {/* Composer floating */}
       <div className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6 md:pb-5">
         <div className="mx-auto w-full max-w-3xl rounded-2xl border border-neutral-200 bg-neutral-50 p-3 shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
-          {/* Mode tabs */}
-          <div className="flex gap-1 mb-3 bg-neutral-200 dark:bg-neutral-800 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => { setMode("t2v"); setReferenceImage(null); setReferenceImagePreview(null); }}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                mode === "t2v"
-                  ? "bg-white dark:bg-neutral-700 shadow-sm text-neutral-900 dark:text-white"
-                  : "text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white"
-              }`}
-            >
-              <VideoIcon size={16} />
-              Teks ke Video
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("i2v")}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                mode === "i2v"
-                  ? "bg-white dark:bg-neutral-700 shadow-sm text-neutral-900 dark:text-white"
-                  : "text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white"
-              }`}
-            >
-              <ImageIcon size={16} />
-              Gambar ke Video
-            </button>
-          </div>
-
-          {/* Settings bar */}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <select
+          <div className="flex flex-wrap items-center gap-2">
+            <ModelPicker
+              models={models.map((m) => ({ id: m.id, label: m.label ?? m.id, cost: m.credits, provider: m.provider }))}
               value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="rounded-lg bg-white px-2 py-1.5 text-xs font-medium text-neutral-700 outline-none dark:bg-neutral-800 dark:text-neutral-200"
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label ?? m.id} ({m.credits} Token)
-                </option>
-              ))}
-            </select>
+              onChange={setModel}
+              priceNote="per video"
+            />
 
-            <label className="relative flex items-center">
-              <select
-                value={ratio}
-                onChange={(e) => setRatio(e.target.value as typeof ratio)}
-                aria-label="Rasio"
-                className="appearance-none rounded-lg bg-white py-1.5 pl-2 pr-7 text-xs font-medium text-neutral-700 outline-none dark:bg-neutral-800 dark:text-neutral-200"
-              >
-                {RATIOS.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="pointer-events-none absolute right-2 text-neutral-500 dark:text-neutral-400" />
-            </label>
+            <PillSelect value={ratio} options={RATIOS} onChange={(v) => setRatio(v as typeof ratio)} label="Rasio" />
 
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setSettingsOpen((o) => !o)}
                 aria-expanded={settingsOpen}
-                className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-neutral-500 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800"
+                className="flex h-9 items-center gap-1 rounded-full border border-neutral-200 pl-3 pr-2 text-xs text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
               >
                 Pengaturan
                 <ChevronDown size={12} className={`transition ${settingsOpen ? "rotate-180" : ""}`} />
               </button>
               {settingsOpen && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setSettingsOpen(false)} aria-hidden="true" />
-                  <div className="absolute bottom-full left-0 z-20 mb-2 w-[calc(100vw-3rem)] max-w-72 rounded-xl border border-neutral-200 bg-white p-3 shadow-xl dark:border-neutral-700 dark:bg-neutral-900">
+                  <div className="fixed inset-0 z-[90]" onClick={() => setSettingsOpen(false)} aria-hidden="true" />
+                  <div className="fixed bottom-24 left-4 z-[100] w-[calc(100vw-2rem)] max-w-72 rounded-xl border border-neutral-200 bg-white p-3 shadow-2xl sm:left-1/2 sm:-translate-x-1/2 dark:border-neutral-700 dark:bg-neutral-900">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs text-neutral-500 mb-1">Durasi</label>
@@ -437,79 +413,113 @@ export default function VideoGenerator() {
             <button
               type="button"
               onClick={fillRandom}
-              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-neutral-500 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800"
+              className="flex h-9 items-center gap-1 rounded-full border border-neutral-200 pl-3 pr-2 text-xs text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
               <Sparkles size={12} />
               Ide acak
             </button>
           </div>
 
-          {/* Input area */}
-          <div className="space-y-2">
-            {mode === "t2v" ? (
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value.slice(0, MAX_LEN))}
-                placeholder="Jelaskan skenario video: subjek, gerakan kamera, lighting, gaya visual..."
-                rows={3}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                    e.preventDefault();
-                    handleCreate();
-                  }
-                }}
-                className="block w-full resize-none bg-transparent px-1 py-2 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-white"
-              />
-            ) : (
-              <div className="space-y-2">
-                <div className="relative">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleReferenceImageUpload}
-                    className="hidden"
-                  />
-                  {referenceImagePreview ? (
-                    <div className="relative aspect-video rounded-xl overflow-hidden bg-neutral-100 dark:bg-neutral-800">
-                      <img src={referenceImagePreview} alt="Reference" className="w-full h-full object-cover" />
-                      <button
-                        onClick={removeReferenceImage}
-                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center"
-                        aria-label="Hapus gambar"
-                      >
-                        <X size={18} />
-                      </button>
+          {/* Input area: layout sama dengan Bikin Gambar */}
+          <div className="mt-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleReferenceImageUpload}
+              className="hidden"
+            />
+            {mode === "i2v" && (
+              <div className="mb-2">
+                {referenceImagePreview ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2 dark:border-neutral-700 dark:bg-neutral-800">
+                    <img src={referenceImagePreview} alt="Gambar referensi" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-neutral-900 dark:text-white">{referenceImage?.name ?? "Gambar referensi"}</p>
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">Jadi bingkai pertama video</p>
                     </div>
-                  ) : (
-                    <label
-                      htmlFor="ref-image-input"
-                      className="flex flex-col items-center justify-center aspect-video rounded-xl border-2 border-dashed border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800 cursor-pointer hover:border-primary/50 transition-colors"
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-primary transition hover:bg-primary/10"
                     >
-                      <ImageIcon className="w-12 h-12 text-neutral-400 mb-2" />
-                      <span className="text-neutral-600 dark:text-neutral-300">Klik atau tarik gambar ke sini</span>
-                      <span className="text-xs text-neutral-400 mt-1">JPG, PNG, WebP — max 10 MB</span>
-                    </label>
-                  )}
-                </div>
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value.slice(0, MAX_LEN))}
-                  placeholder="Motion prompt (opsional): 'kamera zoom-in perlahan', 'subjek bergerak ke kiri'..."
-                  rows={2}
-                  className="block w-full resize-none bg-transparent px-1 py-2 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-white"
-                />
+                      Ganti
+                    </button>
+                    <button
+                      type="button"
+                      onClick={removeReferenceImage}
+                      className="shrink-0 rounded-lg p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-700"
+                      aria-label="Hapus gambar"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={handleDrop}
+                    className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-xs transition ${
+                      dragging
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-neutral-300 text-neutral-500 hover:border-primary/50 dark:border-neutral-600 dark:text-neutral-400"
+                    }`}
+                  >
+                    <ImageIcon size={14} />
+                    Klik atau tarik gambar referensi (JPG/PNG/WebP, maks 10 MB)
+                  </button>
+                )}
+                {imageError && <p className="mt-1 text-xs text-red-500">{imageError}</p>}
               </div>
             )}
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value.slice(0, MAX_LEN))}
+              placeholder={
+                mode === "t2v"
+                  ? "Jelaskan skenario video: subjek, gerakan kamera, lighting, gaya visual..."
+                  : "Gerakan (opsional): 'kamera zoom-in perlahan', 'subjek berjalan ke kiri'..."
+              }
+              rows={2}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                  e.preventDefault();
+                  handleCreate();
+                }
+              }}
+              className="block w-full resize-none bg-transparent px-1 py-2 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-white"
+            />
 
-            {/* Generate button + credits */}
-            <div className="flex items-end justify-between gap-2 pt-1">
-              <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+            {/* Bar bawah: mode · durasi · Token · kirim — sama posisinya dengan studio gambar */}
+            <div className="mt-1 flex items-end justify-between gap-2 px-1">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                <span className="inline-flex gap-1 rounded-lg bg-neutral-200 p-0.5 dark:bg-neutral-800">
+                  {([["t2v", "Teks"], ["i2v", "Gambar"]] as const).map(([m, label]) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => {
+                        setMode(m);
+                        if (m === "t2v") removeReferenceImage();
+                      }}
+                      className={`rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                        mode === m
+                          ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white"
+                          : "text-neutral-600 dark:text-neutral-300"
+                      }`}
+                    >
+                      {label} → Video
+                    </button>
+                  ))}
+                </span>
+                <span>{duration}s</span>
                 <span className="flex items-center gap-1">
                   <Zap size={12} className="text-primary" />
                   {credits} Token
                 </span>
-                <span>{mode === "t2v" ? prompt.length : referenceImage ? "Gambar siap" : "Belum ada gambar"} / {MAX_LEN.toLocaleString("id-ID")}</span>
+                <span className="hidden sm:inline">{prompt.length} / {MAX_LEN.toLocaleString("id-ID")}</span>
               </div>
               <button
                 type="button"
@@ -518,7 +528,7 @@ export default function VideoGenerator() {
                 className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Sparkles size={15} />
-                Buat Video
+                Buat
               </button>
             </div>
           </div>

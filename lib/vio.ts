@@ -26,6 +26,27 @@ export async function vioFetch(path: string, init?: RequestInit) {
   return { ok: res.ok, status: res.status, data };
 }
 
+/**
+ * Unggah gambar referensi ke Vio (multipart field "file") -> asset_id numerik.
+ * Dipakai mode image-to-video: Vio minta `start_frame_asset_id`, bukan base64.
+ * Tanpa retry — duplikat unggahan boros dan bisa bikin dua aset.
+ */
+export async function vioUploadAsset(file: File | Blob, filename = "reference.png"): Promise<number> {
+  const key = await providerKey("vio");
+  if (!key) throw new Error("API key Vio belum diisi (menu Model & API Key di /admin).");
+  const form = new FormData();
+  form.append("file", file, filename);
+  const res = await fetch(`${VIO_BASE}/assets`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}` }, // biarkan runtime set boundary multipart
+    body: form,
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => ({}))) as { asset_id?: number; error?: { message?: string } };
+  if (!res.ok || !data.asset_id) throw new Error(data?.error?.message ?? `Upload gambar gagal (HTTP ${res.status}).`);
+  return data.asset_id;
+}
+
 // UI ratio -> Vio aspect_ratio
 export function mapAspect(kind: "image" | "video", ratio: string): string {
   if (kind === "video") return ratio === "9:16" ? "portrait" : "landscape"; // Veo: landscape|portrait, 1:1 fallback landscape

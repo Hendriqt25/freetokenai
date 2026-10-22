@@ -15,8 +15,14 @@ import {
   type ChatMessage,
 } from "@/lib/chat-history";
 import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
-import { getAppSettings } from "@/lib/settings";
-import { mockWorkspace, suggestionCards } from "@/lib/mock-data";
+import {
+  fetchWorkspace,
+  getAppSettings,
+  notifyWorkspaceChanged,
+  SETTINGS_CHANGED,
+  WORKSPACE_CHANGED,
+} from "@/lib/settings";
+import { suggestionCards } from "@/lib/mock-data";
 import ChatInput from "./ChatInput";
 import SuggestionCard from "./SuggestionCard";
 
@@ -299,6 +305,9 @@ function useStreamingChat() {
           callbacks.onError(e instanceof Error ? e.message : "Streaming gagal");
         }
         return false;
+      } finally {
+        // giliran selesai (sukses/stop/gagal) = saldo sudah dipotong server — segarkan TopBar.
+        notifyWorkspaceChanged();
       }
     },
     [flushNow, pushChunk],
@@ -360,6 +369,24 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
     }
   });
   const [hasMore, setHasMore] = useState(false);
+  // ponytail: tanggal aktif = expires_at dari /api/v1/workspace, bukan teks statis.
+  const [expiresLabel, setExpiresLabel] = useState("");
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => {
+      void fetchWorkspace().then((w) => {
+        if (alive) setExpiresLabel(w.expiresAtLabel);
+      });
+    };
+    refresh();
+    window.addEventListener(WORKSPACE_CHANGED, refresh);
+    window.addEventListener(SETTINGS_CHANGED, refresh);
+    return () => {
+      alive = false;
+      window.removeEventListener(WORKSPACE_CHANGED, refresh);
+      window.removeEventListener(SETTINGS_CHANGED, refresh);
+    };
+  }, []);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [newBelow, setNewBelow] = useState(false);
@@ -581,10 +608,12 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
     return (
       <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-4 pt-6 pb-4 md:px-6 md:pt-10 lg:pt-12 lg:pb-8">
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
-          <span className="flex items-center gap-2 rounded-full border border-neutral-200 px-4 py-1.5 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-            <Wand2 size={14} className="text-primary" />
-            Aktif Sampai {mockWorkspace.expiresAtLabel}
-          </span>
+          {expiresLabel && (
+            <span className="flex items-center gap-2 rounded-full border border-neutral-200 px-4 py-1.5 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
+              <Wand2 size={14} className="text-primary" />
+              Aktif Sampai {expiresLabel}
+            </span>
+          )}
 
           <h1 className="text-center text-2xl font-medium text-neutral-900 md:text-4xl dark:text-white">
             Mau mulai dari mana hari ini?

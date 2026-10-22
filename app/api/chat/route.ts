@@ -157,7 +157,12 @@ export async function POST(req: Request) {
 
   let usageId: string | undefined;
   try {
-    const cost = (await modelCost("chat", model)) ?? chatCost(model);
+    // ponytail: tarif per 1k token × perkiraan token prompt (min 1) — konsisten
+    // dengan jalur streaming yang kini ikut menagih isi pesan/history/dokumen.
+    const per1k = (await modelCost("chat", model)) ?? chatCost(model);
+    const inputChars =
+      gateInput.length + (Array.isArray(body.history) ? body.history.reduce((n, h) => n + String(h?.content ?? "").length, 0) : 0);
+    const cost = Math.max(1, Math.ceil((Math.ceil(inputChars / 4) / 1000) * per1k));
     const res = await withTokens(wsId, cost, () => providerResponse(route, message, history), {
       modelId: model,
       endpointType: "chat",

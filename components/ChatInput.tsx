@@ -3,21 +3,19 @@
 import {
   AlertCircle,
   Check,
-  ChevronDown,
   FileText,
-  ImageIcon,
   Loader2,
   Paperclip,
   Plus,
   Send,
   Square,
-  VideoIcon,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CHAT_MODELS, DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
 import type { ChatAttachment } from "@/lib/chat-history";
 import { fetchCatalogModels, type CatalogModel } from "@/lib/model-catalog";
+import ModelPicker from "./ModelPicker";
 
 type DraftAttachment = {
   key: string;
@@ -64,18 +62,6 @@ const ATTACH_OPTIONS = [
     label: "Upload File",
     description: "Dokumen, PDF, atau file lainnya",
     icon: Paperclip,
-  },
-  {
-    key: "image",
-    label: "Buat Gambar",
-    description: "Generate gambar pakai Token AI",
-    icon: ImageIcon,
-  },
-  {
-    key: "video",
-    label: "Buat Video",
-    description: "Generate video pakai Token AI",
-    icon: VideoIcon,
   },
 ] as const;
 
@@ -145,13 +131,9 @@ export default function ChatInput({
     };
   }, [menuOpen]);
 
-  function handleAttachOption(key: (typeof ATTACH_OPTIONS)[number]["key"]) {
+  function handleAttachOption() {
     setMenuOpen(false);
-    if (key === "file") {
-      fileInputRef.current?.click();
-    }
-    // "image" / "video" — placeholder untuk switch mode Image/Video Generation
-    // (Section 4.3 PRD), belum ada logic nyata di tahap UI slicing ini.
+    fileInputRef.current?.click();
   }
 
   function patchAttachment(key: string, patch: Partial<DraftAttachment>) {
@@ -274,7 +256,7 @@ export default function ChatInput({
             <button
               key={key}
               type="button"
-              onClick={() => handleAttachOption(key)}
+              onClick={() => handleAttachOption()}
               className="flex w-full items-start gap-3 px-3 py-2 text-left transition hover:bg-neutral-100 dark:hover:bg-neutral-700"
             >
               <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary dark:bg-neutral-700 dark:text-white">
@@ -394,25 +376,13 @@ export default function ChatInput({
   );
 
   const modelSelect = (
-    <div className="relative shrink-0">
-      <select
-        value={model}
-        onChange={(event) => onModelChange?.(event.target.value)}
-        disabled={isSending}
-        aria-label="Pilih model"
-        className="h-9 max-w-[6.5rem] cursor-pointer appearance-none truncate rounded-full border border-neutral-200 bg-transparent pl-3 pr-7 text-xs text-neutral-600 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 sm:max-w-[8.5rem] dark:border-neutral-700 dark:text-neutral-300"
-      >
-        {catalog.map((m) => (
-          <option key={`${m.provider ?? "model"}-${m.id}`} value={m.id}>
-            {m.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        size={14}
-        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400"
-      />
-    </div>
+    <ModelPicker
+      models={catalog}
+      value={model}
+      onChange={(id) => onModelChange?.(id)}
+      disabled={isSending}
+      priceNote="per 1.000 token (prompt + jawaban)"
+    />
   );
 
   const hiddenFileInputs = (
