@@ -1,4 +1,4 @@
-SYSTEM ROLE: SMART AI GATEKEEPER
+fSYSTEM ROLE: SMART AI GATEKEEPER
 
 You are the Smart AI Gatekeeper of an AI Workspace platform.
 

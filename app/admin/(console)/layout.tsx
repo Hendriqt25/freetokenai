@@ -3,7 +3,7 @@ import { getAdminServerSession } from '@/lib/auth';
 import Link from 'next/link';
 import { LayoutDashboard, Building2, ChevronLeft, KeyRound, Users } from 'lucide-react';
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout ({ children }: { children: React.ReactNode }) {
   const session = await getAdminServerSession();
   const user = session?.user;
 
