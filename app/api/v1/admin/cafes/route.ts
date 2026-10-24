@@ -14,15 +14,19 @@ export async function GET(req: Request) {
       SELECT
         c.id,
         c.name,
-        COALESCE((SELECT SUM(amount) FROM cafe_token_transactions WHERE cafe_id = c.id AND type = 'topup'), c.prepaid_token_balance)::int AS prepaid_quota,
-        c.prepaid_token_balance AS token_balance,
+        c.is_active,
+        c.prepaid_token_balance::int AS token_balance,
+        COALESCE((SELECT SUM(amount) FROM cafe_token_transactions WHERE cafe_id = c.id AND amount > 0), 0)::int AS total_topup,
+        COALESCE((SELECT SUM(-amount) FROM cafe_token_transactions WHERE cafe_id = c.id AND amount < 0), 0)::int AS total_used,
+        (SELECT MAX(created_at) FROM cafe_token_transactions WHERE cafe_id = c.id) AS last_activity_at,
         (SELECT MAX(expires_at) FROM workspaces WHERE cafe_id = c.id) AS expires_at,
         (SELECT COUNT(*)::int FROM workspaces WHERE cafe_id = c.id AND expires_at > now()) AS active_workspaces,
-        COALESCE((SELECT SUM(tt.amount) FROM token_transactions tt JOIN workspaces w ON w.id = tt.workspace_id WHERE w.cafe_id = c.id AND tt.type = 'grant'), 0)::int AS total_granted
+        (SELECT COUNT(*)::int FROM api_keys WHERE cafe_id = c.id AND is_active AND revoked_at IS NULL) AS active_keys
       FROM cafes c
       ORDER BY c.created_at DESC`) as unknown as {
-      id: string; name: string; prepaid_quota: number; token_balance: number; expires_at: string | null;
-      active_workspaces: number; total_granted: number;
+      id: string; name: string; is_active: boolean; token_balance: number; total_topup: number;
+      total_used: number; last_activity_at: string | null; expires_at: string | null;
+      active_workspaces: number; active_keys: number;
     }[];
 
     return NextResponse.json({ cafes });

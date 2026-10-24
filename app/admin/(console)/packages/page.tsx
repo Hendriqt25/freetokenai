@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Package, Loader2, AlertCircle, Plus, X, Pencil, Trash2, CheckCircle2 } from 'lucide-react';
+import { Package, Loader2, Plus, X, Pencil, Trash2 } from 'lucide-react';
+import { Alert, EmptyState, Loading, PageHeader, Badge } from '@/components/admin/ui';
 
 type PackageRow = {
   id: string;
@@ -138,46 +139,30 @@ export default function AdminPackagesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-            <Package size={22} className="text-primary" />
-            Master Paket Kuota
-          </h1>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Atur paket token, harga, dan masa berlaku default.
-          </p>
-        </div>
-        <button
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition shadow-sm"
-        >
-          <Plus size={16} />
-          Tambah Paket
-        </button>
-      </header>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Master Paket Kuota"
+        description="Atur paket token, harga, dan masa berlaku default."
+        icon={<Package size={22} className="text-primary" />}
+        action={
+          <button
+            onClick={openCreate}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-hover"
+          >
+            <Plus size={16} />
+            Tambah Paket
+          </button>
+        }
+      />
 
-      {notice && (
-        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 flex items-center gap-2 text-emerald-800 dark:text-emerald-300 text-sm">
-          <CheckCircle2 size={16} className="shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
-      {error && (
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-800 dark:text-red-300 text-sm">
-          <AlertCircle size={16} className="shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
+      {notice && <Alert tone="success" onClose={() => setNotice('')}>{notice}</Alert>}
+      {error && <Alert onClose={() => setError('')}>{error}</Alert>}
 
       <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="py-16 flex justify-center">
-            <Loader2 size={24} className="animate-spin text-primary" />
-          </div>
+          <Loading label="Memuat paket..." />
         ) : packages.length === 0 ? (
-          <div className="py-16 text-center text-neutral-400 text-sm">Belum ada paket.</div>
+          <EmptyState title="Belum ada paket" description="Tambahkan paket pertama untuk mulai menjual kuota token." icon={<Package size={32} />} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -201,9 +186,7 @@ export default function AdminPackagesPage() {
                     <td className="px-4 py-3.5 text-xs">{p.cafe_id ? (cafes.find((c) => c.id === p.cafe_id)?.name || '-') : 'Global'}</td>
                     <td className="px-4 py-3.5 text-xs">{p.default_expires_days} (maks {p.max_expires_days})</td>
                     <td className="px-4 py-3.5">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${p.is_active ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500 border-neutral-200 dark:border-neutral-700'}`}>
-                        {p.is_active ? 'Aktif' : 'Nonaktif'}
-                      </span>
+                      <Badge tone={p.is_active ? 'success' : 'neutral'}>{p.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
                     </td>
                     <td className="px-4 py-3.5 text-right">
                       <div className="inline-flex items-center gap-2">
@@ -250,6 +233,11 @@ export default function AdminPackagesPage() {
                   <input type="number" min={1} value={form.tokens_granted} onChange={(e) => setForm({ ...form, tokens_granted: Number(e.target.value) })} required className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary" />
                 </div>
               </div>
+              <p className="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-500 dark:bg-neutral-900/50">
+                {form.rupiah_amount > 0 && form.tokens_granted > 0
+                  ? `Rp ${form.rupiah_amount.toLocaleString('id-ID')} → ${form.tokens_granted.toLocaleString('id-ID')} token (Rp ${(form.rupiah_amount / form.tokens_granted).toFixed(2)}/token)`
+                  : 'Isi harga dan token untuk melihat rasio.'}
+              </p>
               <div>
                 <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">Cafe (kosong = global)</label>
                 <select value={form.cafe_id} onChange={(e) => setForm({ ...form, cafe_id: e.target.value })} className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary">

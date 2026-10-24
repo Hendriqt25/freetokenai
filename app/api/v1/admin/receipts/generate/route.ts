@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { claimUrl } from "@/lib/app-url";
 import { corsHeaders, requireAdmin, requireAllowedOrigin } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
@@ -10,10 +11,6 @@ import { sql } from "@/lib/db";
 // agar tidak ada receipt tanpa potongan kuota.
 
 class InsufficientQuotaError extends Error {}
-
-function claimUrl(code: string): string {
-  return `https://app.restoran.com/claim?code=${code}`;
-}
 
 // ponytail: format RST-<random 6 digit> (contoh PRD §4.1 RST-98234). Retry kecil
 // bila tabrakan receipts_code_key (kolom UNIQUE).
@@ -123,7 +120,7 @@ export async function POST(req: Request) {
       })) as unknown as { kind: "created" | "existing"; receipt: { code: string; tokens_granted: number } };
       const { code: rc, tokens_granted } = out.receipt;
       return NextResponse.json(
-        { code: rc, claim_url: claimUrl(rc), tokens: tokens_granted },
+        { code: rc, claim_url: claimUrl(req, rc), tokens: tokens_granted },
         { status: out.kind === "created" ? 201 : 200, headers: corsHeaders(origin) },
       );
     } catch (e) {

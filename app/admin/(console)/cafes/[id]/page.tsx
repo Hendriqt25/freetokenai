@@ -1,47 +1,97 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, BarChart3, CreditCard, Calendar, Users, Loader2, AlertCircle, ChevronLeft, Activity, TrendingUp } from 'lucide-react';
+import {
+  Activity,
+  ArrowDownLeft,
+  ArrowUpRight,
+  BarChart3,
+  Building2,
+  Calendar,
+  ChevronLeft,
+  CreditCard,
+  Wallet,
+} from 'lucide-react';
+import BalanceModal from '@/components/admin/BalanceModal';
+import {
+  Alert,
+  Badge,
+  EmptyState,
+  Loading,
+  PageHeader,
+  StatCard,
+  cardCls,
+} from '@/components/admin/ui';
 
 type Workspace = { id: string; name: string; token_balance: number; expires_at: string | null };
 type UsageByEndpoint = { endpoint_type: string; tokens_burned: number; count: number };
 type UsageByDay = { day: string; tokens_burned: number; count: number };
+type Tx = {
+  id: string;
+  type: string;
+  amount: number;
+  balance_after: number;
+  reference_type: string | null;
+  note: string | null;
+  created_at: string;
+  created_by: string | null;
+};
 
 type CafeDetail = {
   cafe: {
     id: string;
     name: string;
-    prepaid_quota: number;
+    is_active: boolean;
     token_balance: number;
+    total_topup: number;
+    total_used: number;
+    last_activity_at: string | null;
     expires_at: string | null;
   };
   workspaces: Workspace[];
-  usage: {
-    byEndpoint: UsageByEndpoint[];
-    byDay: UsageByDay[];
-  };
+  transactions: Tx[];
+  usage: { byEndpoint: UsageByEndpoint[]; byDay: UsageByDay[] };
 };
 
+const n = (v: number) => v.toLocaleString('id-ID');
+const d = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '-');
+const dtime = (v: string) => new Date(v).toLocaleString('id-ID');
+
+const TX_META: Record<string, { label: string; tone: 'success' | 'danger' | 'warning' | 'neutral' }> = {
+  topup: { label: 'Top-Up', tone: 'success' },
+  reserve: { label: 'Reserve', tone: 'danger' },
+  refund: { label: 'Refund', tone: 'warning' },
+  adjustment: { label: 'Koreksi', tone: 'neutral' },
+};
+
+const TABS = [
+  { id: 'usage', label: 'Penggunaan API' },
+  { id: 'ledger', label: 'Riwayat Saldo' },
+  { id: 'workspace', label: 'Workspace' },
+] as const;
+
 export default function CafeDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [data, setData] = useState<CafeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [tab, setTab] = useState<(typeof TABS)[number]['id']>('usage');
+  const [balanceMode, setBalanceMode] = useState<'topup' | 'adjust' | null>(null);
 
   useEffect(() => {
-    loadData();
-  }, [params]);
+    void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   async function loadData() {
+    setError('');
     try {
-      const { id } = await params;
       const res = await fetch(`/api/v1/admin/cafes/${id}`, { credentials: 'include', cache: 'no-store' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      setData(data);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
+      setData(body);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal memuat detail cafe');
     } finally {
@@ -49,194 +99,227 @@ export default function CafeDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  function formatDate(dateStr: string | null) {
-    if (!dateStr) return 'Tidak ada';
-    return new Date(dateStr).toLocaleDateString('id-ID');
-  }
+  const burned = data?.usage.byEndpoint.reduce((s, u) => s + u.tokens_burned, 0) ?? 0;
 
-  function formatNumber(n: number) {
-    return n.toLocaleString('id-ID');
-  }
-
-  function formatDay(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
-  }
-
-  const totalTokensBurned = data?.usage.byEndpoint.reduce((sum, u) => sum + u.tokens_burned, 0) ?? 0;
-
-  if (loading) {
-    return (
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <Link href="/admin" className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400 hover:text-primary">
-            <ChevronLeft size={18} />
-            Kembali
-          </Link>
-        </div>
-        <div className="flex justify-center py-12">
-          <Loader2 size={24} className="animate-spin text-primary" />
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className={cardCls}><Loading label="Memuat detail cafe..." /></div>;
 
   if (error || !data) {
     return (
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <Link href="/admin" className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400 hover:text-primary">
-            <ChevronLeft size={18} />
-            Kembali
-          </Link>
-        </div>
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-700 dark:text-red-300" role="alert">
-          <AlertCircle size={18} />
-          <span className="text-sm">{error || 'Cafe tidak ditemukan'}</span>
-        </div>
+      <div className="space-y-4">
+        <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-primary">
+          <ChevronLeft size={16} /> Kembali
+        </Link>
+        <Alert>{error || 'Cafe tidak ditemukan'}</Alert>
       </div>
     );
   }
 
-  const { cafe, workspaces, usage } = data;
+  const { cafe, workspaces, transactions, usage } = data;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <Link href="/admin" className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400 hover:text-primary mb-2">
-            <ChevronLeft size={18} />
-            Kembali ke Daftar Cafe
-          </Link>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-            <Building2 size={24} className="text-primary" />
-            {cafe.name}
-          </h1>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-primary">
+        <ChevronLeft size={16} /> Daftar Cafe
+      </Link>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
-          <div className="flex items-center gap-2 text-primary mb-2">
-            <CreditCard size={18} />
-            <span className="text-sm font-medium">Token Balance</span>
-          </div>
-          <p className="text-3xl font-bold text-neutral-900 dark:text-white">{formatNumber(cafe.token_balance)} Token</p>
-        </div>
-        <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
-          <div className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400 mb-2">
-            <CreditCard size={18} />
-            <span className="text-sm">Prepaid Quota</span>
-          </div>
-          <p className="text-2xl font-semibold text-neutral-900 dark:text-white">{formatNumber(cafe.prepaid_quota)} Token</p>
-        </div>
-        <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
-          <div className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400 mb-2">
-            <Activity size={18} />
-            <span className="text-sm">Total Terpakai</span>
-          </div>
-          <p className="text-2xl font-semibold text-neutral-900 dark:text-white">{formatNumber(totalTokensBurned)} Token</p>
-        </div>
-        <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
-          <div className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400 mb-2">
-            <Calendar size={18} />
-            <span className="text-sm">Aktif Sampai</span>
-          </div>
-          <p className="text-xl font-semibold text-neutral-900 dark:text-white">{formatDate(cafe.expires_at)}</p>
-        </div>
+      <PageHeader
+        title={cafe.name}
+        description={`Aktivitas terakhir: ${cafe.last_activity_at ? dtime(cafe.last_activity_at) : 'belum ada transaksi'}`}
+        icon={<Building2 size={22} className="text-primary" />}
+        action={
+          <>
+            <Badge tone={cafe.is_active ? 'success' : 'neutral'}>{cafe.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
+            <button
+              type="button"
+              onClick={() => setBalanceMode('topup')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+            >
+              <ArrowDownLeft size={15} /> Tambah Saldo
+            </button>
+            <button
+              type="button"
+              onClick={() => setBalanceMode('adjust')}
+              className="rounded-lg border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-600 hover:border-primary hover:text-primary dark:border-neutral-600 dark:text-neutral-300"
+            >
+              Koreksi
+            </button>
+          </>
+        }
+      />
+
+      {notice && <Alert tone="success" onClose={() => setNotice('')}>{notice}</Alert>}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          label="Saldo Token"
+          value={n(cafe.token_balance)}
+          hint={cafe.token_balance < 5000 ? 'Saldo rendah' : 'Siap dipakai'}
+          icon={<Wallet size={16} />}
+          tone={cafe.token_balance < 5000 ? 'danger' : 'primary'}
+        />
+        <StatCard label="Total Top-Up" value={n(cafe.total_topup)} hint="akumulasi masuk" icon={<ArrowDownLeft size={16} />} tone="success" />
+        <StatCard label="Total Terpakai" value={n(cafe.total_used)} hint="akumulasi keluar" icon={<ArrowUpRight size={16} />} tone="warning" />
+        <StatCard label="Aktif Sampai" value={d(cafe.expires_at)} hint={`${workspaces.length} workspace`} icon={<Calendar size={16} />} tone="neutral" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
-            <BarChart3 size={18} className="text-primary" />
-            Penggunaan API per Endpoint
-          </h2>
-          {usage.byEndpoint.length === 0 ? (
-            <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
-              <Activity size={32} className="mx-auto mb-2 text-neutral-300 dark:text-neutral-600" />
-              <p>Belum ada data penggunaan</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {usage.byEndpoint.map((item) => (
-                <div key={item.endpoint_type} className="flex items-center gap-4">
-                  <div className="w-24 text-sm text-neutral-500 dark:text-neutral-400 capitalize">{item.endpoint_type}</div>
-                  <div className="flex-1 h-6 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full transition-all"
-                      style={{ width: `${totalTokensBurned > 0 ? (item.tokens_burned / totalTokensBurned) * 100 : 0}%` }}
-                    />
-                  </div>
-                  <div className="w-28 text-right text-sm font-medium text-neutral-900 dark:text-white">
-                    {formatNumber(item.tokens_burned)} ({item.count} req)
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
-            <TrendingUp size={18} className="text-primary" />
-            Tren Penggunaan (30 hari)
-          </h2>
-          {usage.byDay.length === 0 ? (
-            <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
-              <Activity size={32} className="mx-auto mb-2 text-neutral-300 dark:text-neutral-600" />
-              <p>Belum ada data harian</p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {usage.byDay.map((item) => (
-                <div key={item.day} className="flex items-center gap-3 text-sm">
-                  <div className="w-24 text-neutral-500 dark:text-neutral-400">{formatDay(item.day)}</div>
-                  <div className="flex-1 h-4 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full"
-                      style={{ width: `${totalTokensBurned > 0 ? (item.tokens_burned / totalTokensBurned) * 100 : 0}%` }}
-                    />
-                  </div>
-                  <div className="w-24 text-right font-medium text-neutral-900 dark:text-white">
-                    {formatNumber(item.tokens_burned)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+      <div className="flex gap-1 overflow-x-auto rounded-xl border border-neutral-200 bg-white p-1 dark:border-neutral-700 dark:bg-neutral-800">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              tab === t.id ? 'bg-primary text-white' : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700'
+            }`}
+          >
+            {t.label}
+            {t.id === 'ledger' && ` (${transactions.length})`}
+            {t.id === 'workspace' && ` (${workspaces.length})`}
+          </button>
+        ))}
       </div>
 
-      <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
-        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
-          <Users size={18} className="text-primary" />
-          Workspace Cafe Ini ({workspaces.length})
-        </h2>
-        {workspaces.length === 0 ? (
-          <p className="text-neutral-500 dark:text-neutral-400 text-center py-4">Belum ada workspace untuk cafe ini.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-700">
-                  <th className="pb-2 font-medium">Nama</th>
-                  <th className="pb-2 font-medium">Token Balance</th>
-                  <th className="pb-2 font-medium">Aktif Sampai</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workspaces.map((ws) => (
-                  <tr key={ws.id} className="border-b border-neutral-100 dark:border-neutral-800">
-                    <td className="py-3 font-medium text-neutral-900 dark:text-white">{ws.name}</td>
-                    <td className="py-3 text-neutral-900 dark:text-white">{formatNumber(ws.token_balance)} Token</td>
-                    <td className="py-3 text-neutral-500 dark:text-neutral-400">{formatDate(ws.expires_at)}</td>
-                  </tr>
+      {tab === 'usage' && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <section className={`${cardCls} p-5`}>
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-neutral-900 dark:text-white">
+              <BarChart3 size={16} className="text-primary" /> Token per Endpoint
+            </h2>
+            {usage.byEndpoint.length === 0 ? (
+              <EmptyState title="Belum ada penggunaan" description="Pemakaian API dari workspace cafe ini akan muncul di sini." icon={<Activity size={32} />} />
+            ) : (
+              <div className="space-y-3">
+                {usage.byEndpoint.map((item) => (
+                  <div key={item.endpoint_type} className="text-xs">
+                    <div className="mb-1 flex justify-between">
+                      <span className="capitalize text-neutral-600 dark:text-neutral-300">{item.endpoint_type}</span>
+                      <span className="font-medium text-neutral-900 dark:text-white">{n(item.tokens_burned)} ({item.count} req)</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${burned > 0 ? (item.tokens_burned / burned) * 100 : 0}%` }} />
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            )}
+          </section>
+
+          <section className={`${cardCls} p-5`}>
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-neutral-900 dark:text-white">
+              <Activity size={16} className="text-primary" /> Tren 30 Hari
+            </h2>
+            {usage.byDay.length === 0 ? (
+              <EmptyState title="Belum ada data harian" icon={<Activity size={32} />} />
+            ) : (
+              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                {usage.byDay.map((item) => {
+                  const max = Math.max(...usage.byDay.map((u) => u.tokens_burned), 1);
+                  return (
+                    <div key={item.day} className="flex items-center gap-2 text-xs">
+                      <span className="w-20 shrink-0 text-neutral-500">{d(item.day)}</span>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${(item.tokens_burned / max) * 100}%` }} />
+                      </div>
+                      <span className="w-16 text-right font-medium text-neutral-800 dark:text-neutral-100">{n(item.tokens_burned)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {tab === 'ledger' && (
+        <section className={`${cardCls} overflow-hidden`}>
+          <div className="border-b border-neutral-100 px-5 py-3 dark:border-neutral-700/60">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-neutral-900 dark:text-white">
+              <CreditCard size={16} className="text-primary" /> 20 transaksi terakhir
+            </h2>
+            <p className="mt-0.5 text-xs text-neutral-400">Nilai positif = saldo masuk, negatif = saldo keluar.</p>
           </div>
-        )}
-      </section>
+          {transactions.length === 0 ? (
+            <EmptyState title="Belum ada transaksi saldo" icon={<Wallet size={32} />} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-900/50 dark:text-neutral-400">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Waktu</th>
+                    <th className="px-4 py-3 font-semibold">Tipe</th>
+                    <th className="px-4 py-3 font-semibold">Jumlah</th>
+                    <th className="px-4 py-3 font-semibold">Saldo Setelah</th>
+                    <th className="px-4 py-3 font-semibold">Oleh</th>
+                    <th className="px-4 py-3 font-semibold">Catatan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 dark:divide-neutral-700/50">
+                  {transactions.map((t) => {
+                    const meta = TX_META[t.type] ?? TX_META.adjustment;
+                    return (
+                      <tr key={t.id} className="hover:bg-neutral-50/70 dark:hover:bg-neutral-700/30">
+                        <td className="whitespace-nowrap px-4 py-3 text-xs">{dtime(t.created_at)}</td>
+                        <td className="px-4 py-3"><Badge tone={meta.tone}>{meta.label}</Badge></td>
+                        <td className={`px-4 py-3 text-xs font-semibold ${t.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                          {t.amount > 0 ? '+' : ''}{n(t.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-xs">{n(t.balance_after)}</td>
+                        <td className="px-4 py-3 text-xs">{t.created_by || '-'}</td>
+                        <td className="px-4 py-3 text-xs text-neutral-500">{t.note || t.reference_type || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === 'workspace' && (
+        <section className={`${cardCls} overflow-hidden`}>
+          <div className="border-b border-neutral-100 px-5 py-3 dark:border-neutral-700/60">
+            <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">Workspace ({workspaces.length})</h2>
+          </div>
+          {workspaces.length === 0 ? (
+            <EmptyState title="Belum ada workspace" description="Workspace dibuat otomatis saat customer memakai API key." icon={<Building2 size={32} />} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-900/50 dark:text-neutral-400">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Nama</th>
+                    <th className="px-4 py-3 font-semibold">Saldo</th>
+                    <th className="px-4 py-3 font-semibold">Aktif Sampai</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 dark:divide-neutral-700/50">
+                  {workspaces.map((ws) => (
+                    <tr key={ws.id} className="hover:bg-neutral-50/70 dark:hover:bg-neutral-700/30">
+                      <td className="px-4 py-3 text-xs font-medium text-neutral-900 dark:text-white">{ws.name}</td>
+                      <td className="px-4 py-3 text-xs">{n(ws.token_balance)} token</td>
+                      <td className="px-4 py-3 text-xs text-neutral-500">{d(ws.expires_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {balanceMode && (
+        <BalanceModal
+          cafe={cafe}
+          defaultMode={balanceMode}
+          onClose={() => setBalanceMode(null)}
+          onDone={async (msg) => {
+            setBalanceMode(null);
+            setNotice(msg);
+            await loadData();
+          }}
+        />
+      )}
     </div>
   );
 }

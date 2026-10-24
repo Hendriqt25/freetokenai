@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Coins, KeyRound, Loader2, Sparkles } from "lucide-react";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
+import Link from "next/link";
 import { notifySettingsChanged, notifyWorkspaceChanged } from "@/lib/settings";
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -47,8 +48,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     return () => window.removeEventListener("keydown", onKey);
   }, [open, close]);
 
-  if (!ready) return <DashboardSkeleton />;
-
   return (
     <div className="relative flex h-dvh overflow-hidden bg-white dark:bg-neutral-950">
       {open && (
@@ -64,8 +63,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         <main className="flex min-h-0 flex-1 overflow-hidden">{children}</main>
       </div>
 
-      {/* Modal Blocking jika user belum memiliki sesi / belum validasi API Key */}
-      {!isAuthenticated && (
+      {/* ponytail: shell dirender duluan; modal tunggu cek auth supaya tak nge-flash */}
+      {ready && !isAuthenticated && (
         <ApiKeyPromptModal
           onSuccess={() => {
             setIsAuthenticated(true);
@@ -169,52 +168,14 @@ function ApiKeyPromptModal({ onSuccess }: { onSuccess: () => void }) {
 
           <div className="pt-2 text-center text-[11px] text-neutral-400">
             Belum punya kunci? Pesan kopi / makanan di kasir dan minta struk API Key AI.
+            <div className="mt-2">
+              Pegawai cafe?{" "}
+              <Link href="/kasir" className="font-semibold text-primary hover:underline">
+                Login Kasir POS
+              </Link>
+            </div>
           </div>
         </form>
-      </div>
-    </div>
-  );
-}
-
-function DashboardSkeleton() {
-  const bar = "rounded-md bg-neutral-200 dark:bg-neutral-800 animate-pulse";
-  return (
-    <div
-      role="status"
-      aria-label="Memuat dasbor"
-      aria-busy="true"
-      className="flex h-dvh overflow-hidden bg-white dark:bg-neutral-950"
-    >
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-neutral-200 p-4 lg:flex dark:border-neutral-800">
-        <div className="flex items-center gap-2 px-2 pb-4">
-          <div className={`h-5 w-5 ${bar}`} />
-          <div className={`h-4 w-24 ${bar}`} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className={`h-8 w-full ${bar}`} />
-          ))}
-        </div>
-        <div className="mt-6 px-2">
-          <div className={`mb-2 h-3 w-16 ${bar}`} />
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className={`mb-1.5 h-7 w-full ${bar}`} />
-          ))}
-        </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 px-4 md:px-6 dark:border-neutral-800">
-          <div className={`h-7 w-7 rounded-lg lg:hidden ${bar}`} />
-          <div className={`hidden h-4 w-40 lg:block ${bar}`} />
-          <div className={`h-8 w-28 rounded-full ${bar}`} />
-        </header>
-
-        <main className="mx-auto w-full max-w-3xl flex-1 overflow-hidden px-4 py-6 md:px-6 md:py-8">
-          <div className={`mb-4 h-6 w-48 ${bar}`} />
-          <div className={`mb-2 h-4 w-full ${bar}`} />
-          <div className={`h-4 w-3/4 ${bar}`} />
-        </main>
       </div>
     </div>
   );

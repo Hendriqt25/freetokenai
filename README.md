@@ -11,6 +11,7 @@ Stack: Next.js 16 (App Router) + React 18 + TypeScript + Tailwind, Postgres 16 +
 - [Fitur](#fitur)
 - [Struktur Proyek](#struktur-proyek)
 - [Setup Lokal](#setup-lokal)
+- [Deploy Produksi](#deploy-produksi)
 - [Environment Variables](#environment-variables)
 - [Akun & Data Seed](#akun--data-seed)
 - [Cara Penggunaan](#cara-penggunaan)
@@ -120,7 +121,8 @@ Buka http://localhost:3000 → redirect ke `/dashboard`.
 | `npm run dev` | Dev server Next.js |
 | `npm run build` | Build produksi |
 | `npm run start` | Jalankan hasil build |
-| `npm run lint` | ESLint Next.js |
+| `npm run lint` | Type-check (`tsc --noEmit`) |
+| `npm run typecheck` | Sama dengan `lint` |
 | `npm run db:migrate` | Jalankan `drizzle/*.sql` berurutan (idempoten, tanpa journal) |
 | `npm run db:seed` | Seed data dev (idempoten) |
 
@@ -145,23 +147,42 @@ npm run db:seed
 
 | Variable | Wajib | Keterangan |
 |----------|-------|------------|
+| `DATABASE_URL` | ya | `postgres://postgres:postgres@localhost:5433/resto_ai_dev` |
+| `REDIS_URL` | ya | `redis://localhost:6380` |
 | `VIO_API_KEY` | untuk image/video | API key VIO |
 | `GEMINI_API_KEY` | untuk chat/image | API key Google Gemini |
 | `GEMINI_MODEL` | tidak | Default `gemini-3.5-flash` |
 | `GROQ_API_KEY` | untuk chat fallback | API key Groq |
-| `DATABASE_URL` | ya | `postgres://postgres:postgres@localhost:5433/resto_ai_dev` |
-| `REDIS_URL` | ya | `redis://localhost:6380` |
+| `ADMIN_JWT_SECRET` | production | Signing key JWT admin. Kosong = dev fallback; production menolak request auth |
+| `ADMIN_PASSWORD_PEPPER` | production | Pepper hash password admin (scrypt) |
+| `APP_ENCRYPTION_KEY` | production | Kunci AES-256-GCM API key provider; buat dengan `npm run gen:key` |
+| `APP_BASE_URL` | production | Base URL publik untuk link klaim & QR struk. Kosong = ikut origin request |
+| `ADMIN_ACCESS_TTL` | tidak | Umur access token admin (detik), default `900` |
+| `ADMIN_REFRESH_TTL` | tidak | Umur refresh token admin (detik), default `604800` |
+| `ADMIN_ALLOWED_ORIGINS` | tidak | Origin CORS admin tambahan, dipisah koma |
+| `CLAIM_BASE_URL` | tidak | Nama lama `APP_BASE_URL` (masih dibaca, fallback kedua) |
 
-Dibaca kode dengan default dev (belum tercantum di `.env.example`):
+---
 
-| Variable | Default | Fungsi |
-|----------|---------|--------|
-| `ADMIN_JWT_SECRET` | secret dev | Signing key JWT admin (wajib diganti di produksi) |
-| `ADMIN_ACCESS_TTL` | `900` | Umur access token (detik) |
-| `ADMIN_REFRESH_TTL` | `604800` | Umur refresh token (detik) |
-| `ADMIN_ALLOWED_ORIGINS` | origin lokal | Daftar origin CORS admin, dipisah koma |
-| `ADMIN_PASSWORD_PEPPER` | pepper dev | Pepper hash password admin (wajib diganti) |
-| `CLAIM_BASE_URL` | `http://localhost:3000` | Basis URL `claim_url` struk |
+## Deploy Produksi
+
+Checklist minimal sebelum go-live:
+
+1. **Env**: isi semua variabel bertanda `production` di tabel [Environment Variables](#environment-variables). Bila `ADMIN_JWT_SECRET` / `ADMIN_PASSWORD_PEPPER` kosong, request auth admin gagal (fail-fast) alih-alih diam-diam memakai secret dev.
+2. **Build & jalankan**:
+
+   ```bash
+   npm ci
+   npm run db:migrate
+   npm run build
+   npm run start        # default port 3000; set PORT bila berbeda
+   ```
+
+3. **HTTPS + reverse proxy**: cookie sesi otomatis `Secure` saat `NODE_ENV=production`, jadi aplikasi wajib di belakang TLS. Teruskan header `Host`, `X-Forwarded-Host`, `X-Forwarded-Proto`, atau set `APP_BASE_URL` eksplisit supaya `claim_url` dan QR mengarah ke domain publik.
+4. **Migrasi**: `scripts/db-migrate.mjs` menjalankan ulang seluruh `drizzle/*.sql` setiap kali, jadi setiap file migrasi wajib idempoten (`IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS`).
+5. **Health check**: probe `GET /healthz` (DB + Redis).
+6. **Security headers**: middleware memasang `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, dan `Permissions-Policy` untuk semua route.
+7. **Artefak lokal** (`.next/`, `*.log`, `.sokudo/`) tidak di-track git.
 
 ---
 
@@ -247,7 +268,9 @@ curl -X POST http://localhost:3000/api/v1/auth/claim \
   -d '{"code":"RST-XXXX","identifier":"081200000001"}'
 ```
 
-Respons sukses men-set cookie `ftai_session` sehingga pelanggan langsung masuk dashboard. Struk yang sudah diklaim → `409`; kode tidak ada → `404`.
+Respons sukses men-set cookie `ftai_session` sehingga pelanggan langsung masuk dashboard. Struk yang sudah diklaim -> `409`; kode tidak ada -> `404`.
+
+Halaman klaim untuk pelanggan: **`/claim?code=RST-XXXX`**. Form meminta No. WhatsApp/email, memanggil endpoint di atas, lalu menampilkan saldo token yang masuk. `claim_url` dari `POST /admin/receipts/generate` dan isi QR struk memakai `APP_BASE_URL` (atau origin request bila kosong) - tidak ada domain hardcode.
 
 ### 6. Login admin via API (Bearer, lintas origin)
 
@@ -528,12 +551,7 @@ Backlog -> In Progress -> Under Review -> Done
 
 Tidak ada tiket terbuka di board. Yang tersisa adalah pekerjaan non-tiket berikut:
 
-1. **Perbaikan QA belum di-commit.** Hasil TASK-050 dan TASK-051 sudah diperbaiki di working tree tetapi belum masuk `master`:
-   - `app/api/chat/stream/route.ts` — delta streaming kini diteruskan ke klien (`data: {"text":...}`); sebelumnya hanya frame `done`.
-   - `app/api/v1/admin/cafes/route.ts` dan `[id]/route.ts` — memakai `requireAdmin` sehingga Bearer super admin tidak lagi `403`.
-   - `lib/auth.ts` — `requireAdmin` menerima fallback cookie `ftai_session` (UI admin same-origin).
-
-   Status saat ini: `npx tsc --noEmit` bersih; fix sudah diverifikasi manual, tetapi **belum di-commit**.
+1. **Perbaikan QA sudah masuk `main`.** Delta streaming (`app/api/chat/stream/route.ts`), `requireAdmin` untuk Bearer super admin (`app/api/v1/admin/cafes/*`), dan fallback cookie `ftai_session` di `requireAdmin` sudah ter-commit. `npm run lint` (`tsc --noEmit`) bersih.
 
 2. **Deviasi yang disengaja (bukan bug):**
    - Guard anonim pada endpoint AI hanya aktif saat `NODE_ENV=production`. Di development request anonim memakai workspace seed agar demo jalan.
@@ -541,11 +559,11 @@ Tidak ada tiket terbuka di board. Yang tersisa adalah pekerjaan non-tiket beriku
    - Nama field akhir stream `sessionId`, sedangkan chat JSON memakai `session_id`. Belum diseragamkan.
    - Repo kasir terpisah tidak dibuat. Sejak PRD v1.6 kasir berupa route in-web `/kasir` (TASK-033).
 
-3. **Belum ada test otomatis.** Tidak ada script `npm test`. Verifikasi yang dipakai: `npx tsc --noEmit`, `curl`/HTTP code, dan query DB langsung.
+3. **Belum ada test otomatis.** Tidak ada script `npm test`. Verifikasi yang dipakai: `npm run lint` (`tsc --noEmit`), `curl`/HTTP code, dan query DB langsung.
 
-4. **Konfigurasi produksi belum disediakan di repo.** Sebelum deploy wajib: set `ADMIN_JWT_SECRET` + `ADMIN_PASSWORD_PEPPER` yang kuat, HTTPS (cookie `Secure`), origin CORS admin, dan variabel provider AI.
+4. **Konfigurasi produksi** ada di [Deploy Produksi](#deploy-produksi). `ADMIN_JWT_SECRET`, `ADMIN_PASSWORD_PEPPER`, dan `APP_ENCRYPTION_KEY` wajib diset; tanpa itu auth admin dan enkripsi API key provider gagal alih-alih memakai nilai dev.
 
-5. **Artefak lokal tidak masuk git:** `.sokudo/`, `dev.log`, `dev.err.log`.
+5. **Artefak lokal sudah tidak di-track:** `.sokudo/`, `dev.log`, `dev.err.log`, `check_ts.txt` masuk `.gitignore`.
 
 ---
 

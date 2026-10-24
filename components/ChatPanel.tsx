@@ -361,13 +361,12 @@ function useStreamingChat() {
 export default function ChatPanel({ sessionId }: { sessionId?: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSending, setIsSending] = useState(false);
-  const [model, setModel] = useState(() => {
-    try {
-      return getAppSettings().defaultModel;
-    } catch {
-      return DEFAULT_CHAT_MODEL;
-    }
-  });
+  // ponytail: nilai awal SSR-safe dulu; simpanan localStorage dibaca setelah mount
+  // (baca di initializer = hydration mismatch server vs client).
+  const [model, setModel] = useState(DEFAULT_CHAT_MODEL);
+  useEffect(() => {
+    setModel(getAppSettings().defaultModel);
+  }, []);
   const [hasMore, setHasMore] = useState(false);
   // ponytail: tanggal aktif = expires_at dari /api/v1/workspace, bukan teks statis.
   const [expiresLabel, setExpiresLabel] = useState("");

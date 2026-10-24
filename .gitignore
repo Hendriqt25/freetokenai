@@ -4,3 +4,8 @@ out
 .env
 .env*.local
 *.tsbuildinfo
+*.log
+dev.log
+dev.err.log
+check_ts.txt
+.sokudo

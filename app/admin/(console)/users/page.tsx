@@ -11,13 +11,13 @@ import {
   KeyRound,
   Edit,
   AlertCircle,
-  CheckCircle2,
   Loader2,
   X,
   UserCheck,
   ShieldCheck,
   Power,
 } from 'lucide-react';
+import { Alert, PageHeader } from '@/components/admin/ui';
 
 type UserItem = {
   id: string;
@@ -307,42 +307,24 @@ export default function AdminUsersPage() {
   });
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-            <Users className="text-primary" size={24} />
-            Pengguna & Kasir
-          </h1>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Kelola hak akses akun Super Admin, Kasir Restoran/Cafe, dan Customer
-          </p>
-        </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Pengguna & Kasir"
+        description="Kelola hak akses akun Super Admin, Kasir Restoran/Cafe, dan Customer"
+        icon={<Users size={22} className="text-primary" />}
+        action={
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-hover"
+          >
+            <Plus size={16} />
+            Tambah Kasir / Admin
+          </button>
+        }
+      />
 
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition shadow-sm"
-        >
-          <Plus size={16} />
-          Tambah Kasir / Admin
-        </button>
-      </div>
-
-      {/* Notifications */}
-      {notice && (
-        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 flex items-center gap-2 text-emerald-800 dark:text-emerald-300 text-sm">
-          <CheckCircle2 size={16} className="shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-800 dark:text-red-300 text-sm">
-          <AlertCircle size={16} className="shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
+      {notice && <Alert tone="success" onClose={() => setNotice('')}>{notice}</Alert>}
+      {error && <Alert onClose={() => setError('')}>{error}</Alert>}
 
       {/* Filter Tabs & Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-neutral-800 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700">
@@ -365,6 +347,9 @@ export default function AdminUsersPage() {
               }`}
             >
               {tab.label}
+              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${selectedRole === tab.id ? 'bg-white/20' : 'bg-neutral-100 dark:bg-neutral-700'}`}>
+                {tab.id === 'all' ? users.length : users.filter((u) => u.role === tab.id).length}
+              </span>
             </button>
           ))}
         </div>
@@ -468,7 +453,7 @@ export default function AdminUsersPage() {
                       {u.role === 'kasir' ? (
                         <button
                           onClick={() => openAccessModal(u)}
-                          title="Atur izin & limit"
+                          title={`Izin API key: ${u.can_issue_api_keys ? 'boleh' : 'tidak'} · maks ${u.max_active_keys} key aktif · ${u.daily_issue_limit} terbit/hari`}
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition ${
                             u.can_issue_api_keys
                               ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'

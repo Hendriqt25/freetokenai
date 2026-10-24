@@ -96,7 +96,7 @@ export async function POST(
       await tx`UPDATE cafes SET prepaid_token_balance = prepaid_token_balance - ${quotaAdd} WHERE id = ${cafeId}`;
       await tx`
         INSERT INTO cafe_token_transactions (cafe_id, type, amount, balance_after, reference_type, reference_id, created_by_user_id)
-        VALUES (${cafeId}, 'topup', ${-quotaAdd}, ${cafe[0].prepaid_token_balance - quotaAdd}, 'topup', ${id}, ${auth.user.id})`;
+        VALUES (${cafeId}, 'reserve', ${-quotaAdd}, ${cafe[0].prepaid_token_balance - quotaAdd}, 'apikey', ${id}, ${auth.user.id})`;
       await tx`
         UPDATE api_keys SET token_quota = ${newQuota}, expires_at = ${newExpiry}, is_active = TRUE
         WHERE id = ${id}`;

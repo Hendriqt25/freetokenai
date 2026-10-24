@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
+import { claimUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
 import { rateLimited } from "@/lib/rate-limit";
 
@@ -21,8 +22,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ code: st
     SELECT 1 FROM receipts WHERE code = ${code} LIMIT 1`) as unknown as unknown[];
   if (!rows[0]) return err(404, "RECEIPT_NOT_FOUND", "Struk tidak ditemukan.");
 
-  const base = (process.env.CLAIM_BASE_URL ?? "https://app.restoran.com").replace(/\/+$/, "");
-  const png = await QRCode.toBuffer(`${base}/claim?code=${encodeURIComponent(code)}`, {
+  const png = await QRCode.toBuffer(claimUrl(req, code), {
     type: "png",
     width: 200,
     errorCorrectionLevel: "M",

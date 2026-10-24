@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { KeyRound, Loader2, AlertCircle, Search, Ban, CheckCircle2 } from 'lucide-react';
+import { KeyRound, Loader2, Search, Ban, Wallet, AlertTriangle, Activity } from 'lucide-react';
+import { Alert, EmptyState, Loading, PageHeader, Progress, StatCard } from '@/components/admin/ui';
 
 type KeyRow = {
   id: string;
@@ -72,6 +73,11 @@ export default function AdminApiKeysPage() {
 
   async function handleRevoke() {
     if (!revokeTarget) return;
+    if (revokeReason.trim().length < 3) {
+      setError('Alasan revoke wajib diisi minimal 3 karakter.');
+      return;
+    }
+    setError('');
     setRevoking(revokeTarget.id);
     setError('');
     try {
@@ -106,29 +112,22 @@ export default function AdminApiKeysPage() {
   });
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-          <KeyRound size={22} className="text-primary" />
-          Monitoring API Key
-        </h1>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          Daftar seluruh API key lintas kasir. Revoke jika terjadi penyalahgunaan.
-        </p>
-      </header>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Monitoring API Key"
+        description="Daftar seluruh API key lintas kasir. Revoke jika terjadi penyalahgunaan."
+        icon={<KeyRound size={22} className="text-primary" />}
+      />
 
-      {notice && (
-        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 flex items-center gap-2 text-emerald-800 dark:text-emerald-300 text-sm">
-          <CheckCircle2 size={16} className="shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
-      {error && (
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-800 dark:text-red-300 text-sm">
-          <AlertCircle size={16} className="shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
+      {notice && <Alert tone="success" onClose={() => setNotice('')}>{notice}</Alert>}
+      {error && <Alert onClose={() => setError('')}>{error}</Alert>}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Total Key" value={keys.length.toLocaleString('id-ID')} icon={<KeyRound size={16} />} tone="primary" />
+        <StatCard label="Aktif" value={keys.filter((k) => k.status === 'active').length.toLocaleString('id-ID')} icon={<Activity size={16} />} tone="success" />
+        <StatCard label="Hampir Habis" value={keys.filter((k) => k.status === 'expiring' || k.status === 'exhausted').length.toLocaleString('id-ID')} icon={<AlertTriangle size={16} />} tone="warning" />
+        <StatCard label="Total Token Terpakai" value={keys.reduce((s, k) => s + (k.tokens_used ?? 0), 0).toLocaleString('id-ID')} icon={<Wallet size={16} />} tone="neutral" />
+      </div>
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-neutral-800 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700">
         <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
@@ -166,11 +165,9 @@ export default function AdminApiKeysPage() {
 
       <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="py-16 flex justify-center">
-            <Loader2 size={24} className="animate-spin text-primary" />
-          </div>
+          <Loading label="Memuat API key..." />
         ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-neutral-400 text-sm">Tidak ada API key.</div>
+          <EmptyState title="Tidak ada API key" description="Key yang diterbitkan kasir akan tampil di sini." icon={<KeyRound size={32} />} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -202,8 +199,11 @@ export default function AdminApiKeysPage() {
                         <div className="text-neutral-400">{k.creator_email || ''}</div>
                       </td>
                       <td className="px-4 py-3.5 text-xs">
-                        <div>{(k.remaining ?? 0).toLocaleString('id-ID')} / {(k.token_quota ?? 0).toLocaleString('id-ID')}</div>
-                        <div className="text-neutral-400">{k.tokens_used ?? 0} terpakai</div>
+                        <div className="mb-1 flex justify-between gap-3">
+                          <span>{(k.remaining ?? 0).toLocaleString('id-ID')} / {(k.token_quota ?? 0).toLocaleString('id-ID')}</span>
+                          <span className="text-neutral-400">{k.tokens_used ?? 0} terpakai</span>
+                        </div>
+                        <Progress value={k.remaining ?? 0} max={k.token_quota ?? 0} />
                       </td>
                       <td className="px-4 py-3.5">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${s.cls}`}>
@@ -241,11 +241,16 @@ export default function AdminApiKeysPage() {
               Key <strong>{revokeTarget.key_prefix}…</strong> akan dicabut dan tidak bisa dipakai lagi.
             </p>
             <div>
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">Alasan (opsional)</label>
+              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                Alasan <span className="text-red-500">*</span> <span className="font-normal text-neutral-400">(min. 3 karakter, tercatat di audit log)</span>
+              </label>
               <textarea
                 value={revokeReason}
                 onChange={(e) => setRevokeReason(e.target.value)}
                 rows={3}
+                minLength={3}
+                maxLength={200}
+                placeholder="Contoh: key bocor ke publik"
                 className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-900 dark:text-white outline-none focus:border-primary"
               />
             </div>
@@ -260,8 +265,8 @@ export default function AdminApiKeysPage() {
               <button
                 type="button"
                 onClick={handleRevoke}
-                disabled={revoking === revokeTarget.id}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition text-sm flex items-center gap-2"
+                disabled={revoking === revokeTarget.id || revokeReason.trim().length < 3}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition text-sm flex items-center gap-2 disabled:opacity-50"
               >
                 {revoking === revokeTarget.id && <Loader2 size={14} className="animate-spin" />}
                 Revoke

@@ -27,6 +27,7 @@ export async function GET(req: Request) {
         t.reference_id,
         t.created_at,
         t.created_by_user_id,
+        t.note,
         u.name AS kasir_name,
         u.email AS kasir_email,
         r.code AS receipt_code,
@@ -50,6 +51,7 @@ export async function GET(req: Request) {
       reference_id: string | null;
       created_at: string;
       created_by_user_id: string | null;
+      note: string | null;
       kasir_name: string | null;
       kasir_email: string | null;
       receipt_code: string | null;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
+import { publicBaseUrl } from "@/lib/app-url";
 import { corsHeaders, requireAdmin, requireAllowedOrigin } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
@@ -34,9 +35,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       { error: { code: "CAFE_NOT_FOUND", message: "Cafe tidak ditemukan." } },
       { status: 404, headers: corsHeaders(origin) },
     );
-  // ponytail: satu dep qrcode untuk encode+PNG; stdlib tak punya QR, vendoring
-  // encoder sendiri ratusan baris. Base URL via env agar staging tak hardcode.
-  const base = (process.env.CLAIM_BASE_URL ?? "https://app.restoran.com").replace(/\/+$/, "");
+  // Base URL: APP_BASE_URL / proxy header / origin request (lib/app-url.ts).
+  const base = publicBaseUrl(req);
   const png = await QRCode.toBuffer(`${base}/claim?cafe_id=${encodeURIComponent(cafeId)}`, {
     errorCorrectionLevel: "H",
     width: 300,

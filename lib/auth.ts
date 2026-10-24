@@ -14,7 +14,15 @@ export const MAX_DEVICES = 2;
 // PRD §4.1: admin.restoran.com beda origin dari web app, cookie SameSite=Lax tak cocok.
 // Bearer token pendek umur (akses) + refresh httpOnly cookie; HS256 via node:crypto (stdlib).
 // Refresh token di-hash SHA-256 di tabel admin_sessions (pola sessions).
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET ?? "dev-only-admin-jwt-secret";
+// ponytail: secret dev hanya untuk development. Di production wajib diset —
+// fallback diam-diam = semua deployment memakai kunci yang sama (bisa dipalsukan).
+function envSecret(name: string, devFallback: string): string {
+  const v = process.env[name]?.trim();
+  if (v) return v;
+  if (process.env.NODE_ENV === "production") throw new Error(`[auth] ${name} wajib diset di production.`);
+  return devFallback;
+}
+
 const ACCESS_TTL_SECONDS = Number(process.env.ADMIN_ACCESS_TTL ?? 900); // 15 menit
 const REFRESH_TTL_SECONDS = Number(process.env.ADMIN_REFRESH_TTL ?? 604800); // 7 hari
 const MAX_REFRESH_SESSIONS = 5;
@@ -42,7 +50,14 @@ export function corsHeaders(origin: string | null) {
 export function requireAllowedOrigin(req: Request): string | null | "denied" {
   const origin = (req.headers.get("origin") ?? "").trim() || null;
   if (!origin) return null;
-  return allowedOrigins().includes(origin) ? origin : "denied";
+  if (allowedOrigins().includes(origin)) return origin;
+  // ponytail: akses LAN/tablet (IP host) = same-origin; bandingkan host langsung
+  // ketimbang mewajibkan tiap IP didaftarkan di env.
+  try {
+    const reqHost = req.headers.get("host") ?? new URL(req.url).host;
+    if (new URL(origin).host === reqHost) return origin;
+  } catch {}
+  return "denied";
 }
 
 function b64url(buf: Buffer) {
@@ -52,7 +67,9 @@ function b64urlDecode(s: string) {
   return Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64");
 }
 function partSig(header: string, payload: string) {
-  return createHmac("sha256", ADMIN_JWT_SECRET).update(`${header}.${payload}`).digest();
+  return createHmac("sha256", envSecret("ADMIN_JWT_SECRET", "dev-only-admin-jwt-secret"))
+    .update(`${header}.${payload}`)
+    .digest();
 }
 export function createAccessToken(user: AdminUser): string {
   const header = b64url(Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })));
@@ -101,13 +118,13 @@ export function verifyAccessToken(token: string): AccessClaims | null {
 
 // ---- Password (scrypt + salt; verifikasi deterministik harga-tetap) ----
 // Format disimpan: scrypt$1$<salt-hex>$<key-hex>
-const ADMIN_PASSWORD_PEPPER = process.env.ADMIN_PASSWORD_PEPPER ?? "dev-only-pepper-TASK023";
 const SCRYPT_N = 16384, SCRYPT_R = 8, SCRYPT_P = 1, SCRYPT_KEYLEN = 64;
+const pepper = () => envSecret("ADMIN_PASSWORD_PEPPER", "dev-only-pepper-TASK023");
 export function hashPassword(password: string): string {
   if (password.length < 8 || password.length > 128)
     throw new Error("Password harus 8–128 karakter.");
   const salt = randomBytes(16);
-  const key = scryptSync(password + ADMIN_PASSWORD_PEPPER, salt, SCRYPT_KEYLEN, {
+  const key = scryptSync(password + pepper(), salt, SCRYPT_KEYLEN, {
     N: SCRYPT_N,
     r: SCRYPT_R,
     p: SCRYPT_P,
@@ -119,7 +136,7 @@ export function verifyPassword(password: string, stored: string): boolean {
   if (parts.length !== 4 || parts[0] !== "scrypt") return false;
   const [, , saltHex, keyHex] = parts;
   if (!/^[0-9a-f]+$/i.test(saltHex) || !/^[0-9a-f]+$/i.test(keyHex)) return false;
-  const key = scryptSync(password + ADMIN_PASSWORD_PEPPER, Buffer.from(saltHex, "hex"), SCRYPT_KEYLEN, {
+  const key = scryptSync(password + pepper(), Buffer.from(saltHex, "hex"), SCRYPT_KEYLEN, {
     N: SCRYPT_N,
     r: SCRYPT_R,
     p: SCRYPT_P,

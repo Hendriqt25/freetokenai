@@ -13,9 +13,11 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
+import { Alert, PageHeader } from '@/components/admin/ui';
 
 type Kind = 'chat' | 'image' | 'video';
 
@@ -113,38 +115,25 @@ export default function AdminModelsPage() {
     : 0;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <header className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Model &amp; API Key</h1>
-          <p className="text-neutral-500 dark:text-neutral-400">
-            Tambah provider — semua model ditarik otomatis. Ceklis Chat/Gambar/Video diatur per model.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-hover"
-        >
-          <Plus size={16} />
-          Tambah Provider
-        </button>
-      </header>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeader
+        title="Model & API Key"
+        description="Tambah provider — semua model ditarik otomatis. Ceklis Chat/Gambar/Video diatur per model."
+        icon={<Sparkles size={22} className="text-primary" />}
+        action={
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-hover"
+          >
+            <Plus size={16} />
+            Tambah Provider
+          </button>
+        }
+      />
 
-      {error && (
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-700 dark:text-red-300" role="alert">
-          <AlertCircle size={18} />
-          <span className="text-sm">{error}</span>
-          <button type="button" className="ml-auto text-xs underline" onClick={() => setError('')}>Tutup</button>
-        </div>
-      )}
-      {notice && (
-        <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 flex items-center gap-2 text-green-700 dark:text-green-400" role="status">
-          <CheckCircle2 size={18} />
-          <span className="text-sm">{notice}</span>
-          <button type="button" className="ml-auto text-xs underline" onClick={() => setNotice('')}>Tutup</button>
-        </div>
-      )}
+      {error && <Alert onClose={() => setError('')}>{error}</Alert>}
+      {notice && <Alert tone="success" onClose={() => setNotice('')}>{notice}</Alert>}
 
       <div className="space-y-4">
         {providers.length === 0 && (

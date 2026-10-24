@@ -43,10 +43,13 @@ export default function DeveloperApi() {
   const [justCreated, setJustCreated] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [reveal, setReveal] = useState(false);
+  // ponytail: origin di-set setelah mount; baca window saat render = hydration mismatch
+  const [origin, setOrigin] = useState("");
 
   useEffect(() => {
     const reload = () => setKeys(listApiKeys());
     reload();
+    setOrigin(window.location.origin);
     window.addEventListener(API_KEY_CHANGED, reload);
     window.addEventListener("storage", reload);
     return () => {
@@ -74,7 +77,7 @@ export default function DeveloperApi() {
   }
 
   const activeKey = justCreated ?? keys.find((k) => k.is_active)?.full_key ?? "rst_live_TEMPEL_KEY_DISINI";
-  const curl = `curl -X POST ${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/chat/completions \\
+  const curl = `curl -X POST ${origin}/api/v1/chat/completions \\
   -H "Authorization: Bearer ${activeKey}" \\
   -H "Content-Type: application/json" \\
   -d '{"model": "resto-chat-fast", "messages": [{"role": "user", "content": "Halo!"}]}'`;

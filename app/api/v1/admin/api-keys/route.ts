@@ -198,7 +198,7 @@ export async function GET(req: Request) {
       await tx`UPDATE cafes SET prepaid_token_balance = prepaid_token_balance - ${tokens} WHERE id = ${cafeId}`;
       await tx`
         INSERT INTO cafe_token_transactions (cafe_id, type, amount, balance_after, reference_type, reference_id, created_by_user_id)
-        VALUES (${cafeId}, 'reserve', ${-tokens}, ${cafe[0].prepaid_token_balance - tokens}, 'receipt', ${rows[0].id}, ${auth.user.id})`;
+        VALUES (${cafeId}, 'reserve', ${-tokens}, ${cafe[0].prepaid_token_balance - tokens}, 'apikey', ${rows[0].id}, ${auth.user.id})`;
 
       // update counter harian
       await tx`UPDATE users SET keys_issued_today = ${issuedToday + 1}, keys_issued_date = ${today}::date WHERE id = ${auth.user.id}`;

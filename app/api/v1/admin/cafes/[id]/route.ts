@@ -16,11 +16,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       SELECT
         c.id,
         c.name,
-        COALESCE((SELECT SUM(amount) FROM cafe_token_transactions WHERE cafe_id = c.id AND type = 'topup'), c.prepaid_token_balance)::int AS prepaid_quota,
-        c.prepaid_token_balance AS token_balance,
+        c.is_active,
+        c.prepaid_token_balance::int AS token_balance,
+        COALESCE((SELECT SUM(amount) FROM cafe_token_transactions WHERE cafe_id = c.id AND amount > 0), 0)::int AS total_topup,
+        COALESCE((SELECT SUM(-amount) FROM cafe_token_transactions WHERE cafe_id = c.id AND amount < 0), 0)::int AS total_used,
+        (SELECT MAX(created_at) FROM cafe_token_transactions WHERE cafe_id = c.id) AS last_activity_at,
         (SELECT MAX(expires_at) FROM workspaces WHERE cafe_id = c.id) AS expires_at
       FROM cafes c WHERE c.id = ${id} LIMIT 1`) as unknown as {
-      id: string; name: string; prepaid_quota: number; token_balance: number; expires_at: string | null;
+      id: string; name: string; is_active: boolean; token_balance: number; total_topup: number;
+      total_used: number; last_activity_at: string | null; expires_at: string | null;
     }[];
 
     if (!cafe[0]) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'Cafe tidak ditemukan' } }, { status: 404 });
@@ -54,9 +58,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         LIMIT 30`) as unknown as { day: string; tokens_burned: number; count: number }[];
     }
 
+    const transactions = (await sql`
+      SELECT t.id, t.type, t.amount, t.balance_after, t.reference_type, t.note, t.created_at,
+             COALESCE(u.name, u.email) AS created_by
+      FROM cafe_token_transactions t
+      LEFT JOIN users u ON u.id = t.created_by_user_id
+      WHERE t.cafe_id = ${id}
+      ORDER BY t.created_at DESC
+      LIMIT 20`) as unknown as {
+      id: string; type: string; amount: number; balance_after: number; reference_type: string | null;
+      note: string | null; created_at: string; created_by: string | null;
+    }[];
+
     return NextResponse.json({
       cafe: cafe[0],
       workspaces,
+      transactions,
       usage: { byEndpoint: usageByEndpoint, byDay: usageByDay },
     });
   } catch (e) {

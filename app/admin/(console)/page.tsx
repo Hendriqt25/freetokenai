@@ -1,37 +1,68 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Building2, BarChart3, CreditCard, Calendar, Users, Loader2, AlertCircle } from 'lucide-react';
+import {
+  Activity,
+  ArrowUpRight,
+  Building2,
+  CreditCard,
+  KeyRound,
+  Search,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
+import {
+  Alert,
+  Badge,
+  EmptyState,
+  Loading,
+  PageHeader,
+  StatCard,
+  WelcomeBanner,
+  cardCls,
+  inputCls,
+} from '@/components/admin/ui';
+import BalanceModal from '@/components/admin/BalanceModal';
 
 type Cafe = {
   id: string;
   name: string;
-  prepaid_quota: number;
+  is_active: boolean;
   token_balance: number;
+  total_topup: number;
+  total_used: number;
+  last_activity_at: string | null;
   expires_at: string | null;
   active_workspaces: number;
-  total_granted: number;
+  active_keys: number;
 };
+
+const n = (v: number) => v.toLocaleString('id-ID');
+const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID') : '-');
 
 export default function AdminPage() {
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [search, setSearch] = useState('');
+
+  const [balanceTarget, setBalanceTarget] = useState<Cafe | null>(null);
+  const [mode, setMode] = useState<'topup' | 'adjust'>('topup');
 
   useEffect(() => {
-    loadCafes();
+    void loadCafes();
   }, []);
 
   async function loadCafes() {
+    setError('');
     try {
       const res = await fetch('/api/v1/admin/cafes', { credentials: 'include', cache: 'no-store' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      setCafes(data.cafes);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
+      setCafes(data.cafes ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal memuat cafe');
     } finally {
@@ -39,96 +70,173 @@ export default function AdminPage() {
     }
   }
 
-  function formatDate(dateStr: string | null) {
-    if (!dateStr) return 'Tidak ada';
-    return new Date(dateStr).toLocaleDateString('id-ID');
+  function showNotice(msg: string) {
+    setNotice(msg);
+    setTimeout(() => setNotice(''), 5000);
   }
 
-  function formatNumber(n: number) {
-    return n.toLocaleString('id-ID');
+  function openBalance(cafe: Cafe, nextMode: 'topup' | 'adjust') {
+    setBalanceTarget(cafe);
+    setMode(nextMode);
   }
+
+  const totals = useMemo(
+    () =>
+      cafes.reduce(
+        (acc, c) => ({
+          balance: acc.balance + c.token_balance,
+          topup: acc.topup + c.total_topup,
+          used: acc.used + c.total_used,
+          low: acc.low + (c.token_balance < 5000 ? 1 : 0),
+        }),
+        { balance: 0, topup: 0, used: 0, low: 0 },
+      ),
+    [cafes],
+  );
+
+  const filtered = cafes.filter((c) => c.name.toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Daftar Cafe</h1>
-        <p className="text-neutral-500 dark:text-neutral-400">Kelola cafe, kuota prepaid, dan lihat penggunaan token</p>
-      </header>
+    <div className="space-y-6">
+      <WelcomeBanner
+        name="Super Admin"
+        description="Pantau saldo prepaid, konsumsi token, dan aktivitas workspace seluruh cafe dari satu tempat."
+      />
+      <PageHeader
+        title="Daftar Cafe"
+        description="Pantau saldo prepaid, konsumsi token, dan workspace tiap cafe."
+        icon={<Building2 size={22} className="text-primary" />}
+        action={
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari cafe..."
+              className={`${inputCls} w-full pl-9 sm:w-56`}
+            />
+          </div>
+        }
+      />
 
-      {error && (
-        <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-700 dark:text-red-300" role="alert">
-          <AlertCircle size={18} />
-          <span className="text-sm">{error}</span>
+      {notice && <Alert tone="success" onClose={() => setNotice('')}>{notice}</Alert>}
+      {error && <Alert onClose={() => setError('')}>{error}</Alert>}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Total Saldo" value={n(totals.balance)} hint="token tersedia" icon={<Wallet size={16} />} />
+        <StatCard label="Total Top-Up" value={n(totals.topup)} hint="akumulasi masuk" icon={<TrendingUp size={16} />} tone="success" />
+        <StatCard label="Total Terpakai" value={n(totals.used)} hint="akumulasi keluar" icon={<TrendingDown size={16} />} tone="warning" />
+        <StatCard label="Saldo Rendah" value={n(totals.low)} hint="< 5.000 token" icon={<Activity size={16} />} tone={totals.low > 0 ? 'danger' : 'neutral'} />
+      </div>
+
+      {loading ? (
+        <div className={cardCls}>
+          <Loading label="Memuat cafe..." />
+        </div>
+      ) : cafes.length === 0 ? (
+        <div className={cardCls}>
+          <EmptyState
+            title="Belum ada cafe"
+            description="Tambahkan cafe lewat seed atau database, lalu saldo bisa diisi dari halaman ini."
+            icon={<Building2 size={44} />}
+          />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className={cardCls}>
+          <EmptyState title="Cafe tidak ditemukan" description={`Tidak ada cafe yang cocok dengan "${search}".`} icon={<Search size={40} />} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((cafe) => (
+            <div key={cafe.id} className={`${cardCls} flex flex-col p-5`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <Building2 size={20} className="text-primary" />
+                  </div>
+                  <div>
+                    <Link href={`/admin/cafes/${cafe.id}`} className="font-semibold text-neutral-900 hover:text-primary dark:text-white">
+                      {cafe.name}
+                    </Link>
+                    <p className="font-mono text-[11px] text-neutral-400">{cafe.id.slice(0, 8)}</p>
+                  </div>
+                </div>
+                <Badge tone={cafe.is_active ? 'success' : 'neutral'}>{cafe.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-300">
+                    <CreditCard size={14} className="text-primary" /> Saldo token
+                  </span>
+                  <span className={`text-lg font-bold ${cafe.token_balance < 5000 ? 'text-red-600 dark:text-red-400' : 'text-primary'}`}>
+                    {n(cafe.token_balance)}
+                  </span>
+                </div>
+              </div>
+
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-neutral-50 p-2.5 dark:bg-neutral-900/50">
+                  <dt className="text-neutral-400">Total top-up</dt>
+                  <dd className="font-semibold text-neutral-800 dark:text-neutral-100">{n(cafe.total_topup)}</dd>
+                </div>
+                <div className="rounded-lg bg-neutral-50 p-2.5 dark:bg-neutral-900/50">
+                  <dt className="text-neutral-400">Terpakai</dt>
+                  <dd className="font-semibold text-neutral-800 dark:text-neutral-100">{n(cafe.total_used)}</dd>
+                </div>
+                <div className="rounded-lg bg-neutral-50 p-2.5 dark:bg-neutral-900/50">
+                  <dt className="text-neutral-400">Workspace</dt>
+                  <dd className="font-semibold text-neutral-800 dark:text-neutral-100">{cafe.active_workspaces}</dd>
+                </div>
+                <div className="rounded-lg bg-neutral-50 p-2.5 dark:bg-neutral-900/50">
+                  <dt className="flex items-center gap-1 text-neutral-400">
+                    <KeyRound size={11} /> Key aktif
+                  </dt>
+                  <dd className="font-semibold text-neutral-800 dark:text-neutral-100">{cafe.active_keys}</dd>
+                </div>
+              </dl>
+
+              <p className="mt-3 text-[11px] text-neutral-400">Aktivitas terakhir: {dt(cafe.last_activity_at)}</p>
+
+              <div className="mt-4 flex items-center gap-2 border-t border-neutral-100 pt-3 dark:border-neutral-700/60">
+                <button
+                  type="button"
+                  onClick={() => openBalance(cafe, 'topup')}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-hover"
+                >
+                  <TrendingUp size={14} /> Tambah Saldo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openBalance(cafe, 'adjust')}
+                  className="rounded-lg border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-600 transition hover:border-primary hover:text-primary dark:border-neutral-600 dark:text-neutral-300"
+                >
+                  Koreksi
+                </button>
+                <Link
+                  href={`/admin/cafes/${cafe.id}`}
+                  className="rounded-lg border border-neutral-200 p-2 text-neutral-500 transition hover:border-primary hover:text-primary dark:border-neutral-600"
+                  aria-label={`Detail ${cafe.name}`}
+                >
+                  <ArrowUpRight size={16} />
+                </Link>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 size={24} className="animate-spin text-primary" />
-        </div>
-      ) : cafes.length === 0 ? (
-        <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
-          <Building2 size={48} className="mx-auto mb-2 text-neutral-300 dark:text-neutral-600" />
-          <p>Belum ada cafe. Tambah cafe via database atau seed.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {cafes.map((cafe) => (
-            <Link
-              key={cafe.id}
-              href={`/admin/cafes/${cafe.id}`}
-              className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6 hover:border-primary/50 hover:shadow-lg transition flex flex-col"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Building2 size={24} className="text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-neutral-900 dark:text-white">{cafe.name}</h3>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">{cafe.id.slice(0, 8)}...</p>
-                  </div>
-                </div>
-                <BarChart3 size={20} className="text-neutral-400 dark:text-neutral-500" />
-              </div>
-
-              <div className="space-y-3 flex-1">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 dark:bg-primary/10">
-                  <div className="flex items-center gap-2">
-                    <CreditCard size={16} className="text-primary" />
-                    <span className="text-sm text-neutral-600 dark:text-neutral-400">Token Balance</span>
-                  </div>
-                  <span className="font-bold text-lg text-primary dark:text-primary">{formatNumber(cafe.token_balance)}</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-900/50">
-                    <p className="text-neutral-500 dark:text-neutral-400">Prepaid Quota</p>
-                    <p className="font-medium text-neutral-900 dark:text-white">{formatNumber(cafe.prepaid_quota)} Token</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-900/50">
-                    <p className="text-neutral-500 dark:text-neutral-400">Total Granted</p>
-                    <p className="font-medium text-neutral-900 dark:text-white">{formatNumber(cafe.total_granted)} Token</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-900/50">
-                    <p className="text-neutral-500 dark:text-neutral-400">Aktif Sampai</p>
-                    <p className="font-medium text-neutral-900 dark:text-white">{formatDate(cafe.expires_at)}</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-900/50">
-                    <p className="text-neutral-500 dark:text-neutral-400">Workspace</p>
-                    <p className="font-medium text-neutral-900 dark:text-white">{cafe.active_workspaces}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-                <span className="text-sm text-primary font-medium flex items-center gap-1">
-                  Lihat detail penggunaan API →
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
+      {balanceTarget && (
+        <BalanceModal
+          cafe={balanceTarget}
+          defaultMode={mode}
+          onClose={() => setBalanceTarget(null)}
+          onDone={(msg) => {
+            setBalanceTarget(null);
+            showNotice(msg);
+            void loadCafes();
+          }}
+        />
       )}
     </div>
   );
