@@ -3,6 +3,7 @@
 import { ChevronDown, Clock, Download, ImageIcon, Loader2, RotateCcw, Sparkles, Trash2, VideoIcon, X, Zap } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { loadMediaHistory, removeMediaAsset, type MediaSession } from "@/lib/media-history";
+import { useT, type Lang, type TKey } from "@/lib/i18n";
 import {
   MEDIA_HISTORY_CHANGED,
   MEDIA_JOBS_CHANGED,
@@ -27,50 +28,71 @@ const VIDEO_MODELS = [
 const RATIOS = ["16:9", "9:16", "1:1"] as const;
 const DURATIONS = [5, 10] as const;
 const MOTIONS = [
-  { value: "low", label: "Low — Gerakan halus" },
-  { value: "medium", label: "Medium — Gerakan seimbang" },
-  { value: "high", label: "High — Gerakan dinamis" },
-] as const;
+  { value: "low", label: "video.motion.low" },
+  { value: "medium", label: "video.motion.medium" },
+  { value: "high", label: "video.motion.high" },
+] as const satisfies readonly { value: string; label: TKey }[];
 const QUALITIES = ["720p", "1080p"] as const;
 const FPS_OPTIONS = [24, 30] as const;
 
-const EXAMPLES_T2V = [
-  "Kamera mendekat perlahan ke rumah di tepi danau, kabut pagi",
-  "Uap mengepul dari mangkok ramen, close-up sinematik",
-  "Barista menuang latte art, slow motion 4K",
-  "Drone terbang di atas sawah saat matahari terbit",
-  "Kota futuristik saat hujan neon di malam hari, sinematik",
-];
+const EXAMPLES_T2V: Record<Lang, string[]> = {
+  id: [
+    "Kamera mendekat perlahan ke rumah di tepi danau, kabut pagi",
+    "Uap mengepul dari mangkok ramen, close-up sinematik",
+    "Barista menuang latte art, slow motion 4K",
+    "Drone terbang di atas sawah saat matahari terbit",
+    "Kota futuristik saat hujan neon di malam hari, sinematik",
+  ],
+  en: [
+    "Slow camera push toward a house by the lake, morning mist",
+    "Steam rising from a bowl of ramen, cinematic close-up",
+    "Barista pouring latte art, 4K slow motion",
+    "Drone flying over rice fields at sunrise",
+    "Futuristic city in neon rain at night, cinematic",
+  ],
+};
 
-const EXAMPLES_I2V = [
-  "Kamera zoom-in perlahan ke wajah subjek",
-  "Subjek bergerak ke kiri sambil tersenyum",
-  "Pan kamera mengikuti gerakan tangan",
-  "Efek zoom-out dramatis dari detail ke pemandangan luas",
-];
+const EXAMPLES_I2V: Record<Lang, string[]> = {
+  id: [
+    "Kamera zoom-in perlahan ke wajah subjek",
+    "Subjek bergerak ke kiri sambil tersenyum",
+    "Pan kamera mengikuti gerakan tangan",
+    "Efek zoom-out dramatis dari detail ke pemandangan luas",
+  ],
+  en: [
+    "Slow camera zoom-in toward the subject's face",
+    "The subject moves left while smiling",
+    "Camera pan following the hand movement",
+    "Dramatic zoom-out from a detail to a wide view",
+  ],
+};
 
 const MAX_LEN = 5000;
 
 // Vio menolak prompt kosong walau mode i2v, jadi beri gerakan default yang aman.
-const DEFAULT_I2V_PROMPT = "Gerakan kamera halus dan natural, subjek bergerak perlahan";
+const DEFAULT_I2V_PROMPT: Record<Lang, string> = {
+  id: "Gerakan kamera halus dan natural, subjek bergerak perlahan",
+  en: "Smooth, natural camera movement, the subject moves slowly",
+};
 
 type FeedItem = { url: string; prompt: string; model: string; session: MediaSession; mode?: VideoMode };
 
-function timeAgo(iso: string): string {
+function timeAgo(t: (key: TKey, vars?: Record<string, string | number>) => string, iso: string): string {
   const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 1) return "baru saja";
-  if (mins < 60) return `${mins} menit lalu`;
+  if (mins < 1) return t("media.justNow");
+  if (mins < 60) return t("media.minutesAgo", { n: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} jam lalu`;
-  return `${Math.floor(hours / 24)} hari lalu`;
+  if (hours < 24) return t("media.hoursAgo", { n: hours });
+  return t("media.daysAgo", { n: Math.floor(hours / 24) });
 }
 
-function expiryLabel(iso: string): string {
+function expiryLabel(t: (key: TKey, vars?: Record<string, string | number>) => string, iso: string): string {
   const daysLeft = Math.ceil((new Date(iso).getTime() + 30 * 86400000 - Date.now()) / 86400000);
-  return daysLeft > 0 ? `Kedaluwarsa ${daysLeft} hari lagi` : "Sudah kedaluwarsa";
+  return daysLeft > 0 ? t("media.expiresIn", { n: daysLeft }) : t("media.expired");
 }
 
 export default function VideoGenerator() {
+  const { t, lang, locale } = useT();
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState<string>(VIDEO_MODELS[0].id);
   const [ratio, setRatio] = useState(RATIOS[0]);
@@ -157,7 +179,7 @@ export default function VideoGenerator() {
   );
 
   function fillRandom() {
-    const examples = mode === "t2v" ? EXAMPLES_T2V : EXAMPLES_I2V;
+    const examples = mode === "t2v" ? EXAMPLES_T2V[lang] ?? EXAMPLES_T2V.id : EXAMPLES_I2V[lang] ?? EXAMPLES_I2V.id;
     const pick = examples[Math.floor(Math.random() * examples.length)];
     setPrompt(pick);
   }
@@ -172,7 +194,7 @@ export default function VideoGenerator() {
     setFps(item.session.fps ?? 30);
     setMode(item.mode ?? "t2v");
     if (item.mode === "i2v" && item.session.reference_image_url) {
-      alert("Untuk regenerate Image-to-Video, silakan unggah ulang gambar referensinya.");
+      alert(t("video.regenAlert"));
     }
     setSelected(null);
   }
@@ -185,11 +207,11 @@ export default function VideoGenerator() {
   function applyReferenceFile(file: File | undefined | null) {
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setImageError("Format gambar harus JPG, PNG, atau WebP.");
+      setImageError(t("video.refFormat"));
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      setImageError("Ukuran gambar maksimal 10 MB.");
+      setImageError(t("video.refSize"));
       return;
     }
     if (referenceImagePreview) URL.revokeObjectURL(referenceImagePreview);
@@ -218,7 +240,7 @@ export default function VideoGenerator() {
 
   async function handleCreate() {
     if (!valid) return;
-    const sent = prompt.trim() || (mode === "i2v" ? DEFAULT_I2V_PROMPT : "");
+    const sent = prompt.trim() || (mode === "i2v" ? DEFAULT_I2V_PROMPT[lang] ?? DEFAULT_I2V_PROMPT.id : "");
     const styledPrompt = sent;
     setPrompt("");
     if (mode === "i2v") removeReferenceImage();
@@ -250,9 +272,9 @@ export default function VideoGenerator() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-white dark:bg-neutral-950">
       <header className="px-4 pt-4 md:px-6 md:pt-5">
-        <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">Bikin Video</h1>
+        <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t("video.title")}</h1>
         <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">
-          {mode === "t2v" ? "Teks ke video" : "Gambar ke video"} via VioStudio & Gemini Veo.
+          {mode === "t2v" ? t("video.subtitle.t2v") : t("video.subtitle.i2v")}
         </p>
       </header>
 
@@ -263,12 +285,12 @@ export default function VideoGenerator() {
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-300">
               <VideoIcon size={24} />
             </div>
-            <h2 className="text-lg font-medium text-neutral-900 dark:text-white">Belum ada video</h2>
+            <h2 className="text-lg font-medium text-neutral-900 dark:text-white">{t("video.empty")}</h2>
             <p className="max-w-sm text-sm text-neutral-500 dark:text-neutral-400">
-              Pilih mode, tulis prompt/unggah gambar, lalu tekan Buat — atau klik contoh di bawah.
+              {t("video.emptyDesc")}
             </p>
             <div className="mt-2 flex w-full max-w-md flex-col gap-2">
-              {(mode === "t2v" ? EXAMPLES_T2V : EXAMPLES_I2V).map((ex) => (
+              {(mode === "t2v" ? EXAMPLES_T2V[lang] ?? EXAMPLES_T2V.id : EXAMPLES_I2V[lang] ?? EXAMPLES_I2V.id).map((ex) => (
                 <button
                   key={ex}
                   type="button"
@@ -292,7 +314,7 @@ export default function VideoGenerator() {
                 >
                   <Loader2 size={20} className="animate-spin text-primary" />
                   <p className="line-clamp-2 text-xs text-neutral-500 dark:text-neutral-400">{p.text}</p>
-                  <span className="text-[10px] text-neutral-400">Memproses...</span>
+                  <span className="text-[10px] text-neutral-400">{t("video.processing")}</span>
                 </div>
               ))
             )}
@@ -301,7 +323,7 @@ export default function VideoGenerator() {
                 key={`${item.session.id}-${i}`}
                 type="button"
                 onClick={() => setSelected(item)}
-                title={`${item.prompt} — klik untuk lihat detail`}
+                title={t("media.clickDetail", { prompt: item.prompt })}
                 className="group relative overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50 text-left dark:border-neutral-800 dark:bg-neutral-900"
               >
                 <video
@@ -312,12 +334,12 @@ export default function VideoGenerator() {
                 />
                 <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
                   <VideoIcon size={11} />
-                  Video
+                  {t("media.videoLabel")}
                 </span>
                 <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[11px] text-white opacity-0 transition group-hover:opacity-100">
                   <Download size={11} />
                   <a href={item.url} download target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-                    Unduh
+                    {t("video.download")}
                   </a>
                 </span>
                 <span className="absolute top-2 left-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[10px] text-white">
@@ -331,7 +353,7 @@ export default function VideoGenerator() {
 
         {error && (
           <p className="mx-4 mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-600 md:mx-6 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
-            Gagal: {error}
+            {t("media.failed", { error })}
           </p>
         )}
       </div>
@@ -344,10 +366,10 @@ export default function VideoGenerator() {
               models={models.map((m) => ({ id: m.id, label: m.label ?? m.id, cost: m.credits, provider: m.provider }))}
               value={model}
               onChange={setModel}
-              priceNote="per video"
+              priceNote={t("media.pricePerVideo")}
             />
 
-            <PillSelect value={ratio} options={RATIOS} onChange={(v) => setRatio(v as typeof ratio)} label="Rasio" />
+            <PillSelect value={ratio} options={RATIOS} onChange={(v) => setRatio(v as typeof ratio)} label={t("video.ratio")} />
 
             <div className="relative">
               <button
@@ -356,7 +378,7 @@ export default function VideoGenerator() {
                 aria-expanded={settingsOpen}
                 className="flex h-9 items-center gap-1 rounded-full border border-neutral-200 pl-3 pr-2 text-xs text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
               >
-                Pengaturan
+                {t("video.settings")}
                 <ChevronDown size={12} className={`transition ${settingsOpen ? "rotate-180" : ""}`} />
               </button>
               {settingsOpen && (
@@ -365,7 +387,7 @@ export default function VideoGenerator() {
                   <div className="fixed bottom-24 left-4 z-[100] w-[calc(100vw-2rem)] max-w-72 rounded-xl border border-neutral-200 bg-white p-3 shadow-2xl sm:left-1/2 sm:-translate-x-1/2 dark:border-neutral-700 dark:bg-neutral-900">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs text-neutral-500 mb-1">Durasi</label>
+                        <label className="block text-xs text-neutral-500 mb-1">{t("video.duration")}</label>
                         <select
                           value={duration}
                           onChange={(e) => setDuration(Number(e.target.value))}
@@ -375,17 +397,17 @@ export default function VideoGenerator() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs text-neutral-500 mb-1">Motion</label>
+                        <label className="block text-xs text-neutral-500 mb-1">{t("video.motion")}</label>
                         <select
                           value={motion}
                           onChange={(e) => setMotion(e.target.value as typeof motion)}
                           className="w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white"
                         >
-                          {MOTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                          {MOTIONS.map((m) => <option key={m.value} value={m.value}>{t(m.label)}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs text-neutral-500 mb-1">Kualitas</label>
+                        <label className="block text-xs text-neutral-500 mb-1">{t("video.quality")}</label>
                         <select
                           value={quality}
                           onChange={(e) => setQuality(e.target.value as typeof quality)}
@@ -416,7 +438,7 @@ export default function VideoGenerator() {
               className="flex h-9 items-center gap-1 rounded-full border border-neutral-200 pl-3 pr-2 text-xs text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
               <Sparkles size={12} />
-              Ide acak
+              {t("video.random")}
             </button>
           </div>
 
@@ -433,23 +455,23 @@ export default function VideoGenerator() {
               <div className="mb-2">
                 {referenceImagePreview ? (
                   <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2 dark:border-neutral-700 dark:bg-neutral-800">
-                    <img src={referenceImagePreview} alt="Gambar referensi" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                    <img src={referenceImagePreview} alt={t("video.reference.alt")} className="h-10 w-10 shrink-0 rounded-lg object-cover" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-medium text-neutral-900 dark:text-white">{referenceImage?.name ?? "Gambar referensi"}</p>
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">Jadi bingkai pertama video</p>
+                      <p className="truncate text-xs font-medium text-neutral-900 dark:text-white">{referenceImage?.name ?? t("video.reference.alt")}</p>
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">{t("video.reference.firstFrame")}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-primary transition hover:bg-primary/10"
                     >
-                      Ganti
+                      {t("video.reference.change")}
                     </button>
                     <button
                       type="button"
                       onClick={removeReferenceImage}
                       className="shrink-0 rounded-lg p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-700"
-                      aria-label="Hapus gambar"
+                      aria-label={t("video.reference.remove")}
                     >
                       <X size={14} />
                     </button>
@@ -468,7 +490,7 @@ export default function VideoGenerator() {
                     }`}
                   >
                     <ImageIcon size={14} />
-                    Klik atau tarik gambar referensi (JPG/PNG/WebP, maks 10 MB)
+                    {t("video.reference.drop")}
                   </button>
                 )}
                 {imageError && <p className="mt-1 text-xs text-red-500">{imageError}</p>}
@@ -479,8 +501,8 @@ export default function VideoGenerator() {
               onChange={(e) => setPrompt(e.target.value.slice(0, MAX_LEN))}
               placeholder={
                 mode === "t2v"
-                  ? "Jelaskan skenario video: subjek, gerakan kamera, lighting, gaya visual..."
-                  : "Gerakan (opsional): 'kamera zoom-in perlahan', 'subjek berjalan ke kiri'..."
+                  ? t("video.prompt.t2v")
+                  : t("video.prompt.i2v")
               }
               rows={2}
               onKeyDown={(e) => {
@@ -496,7 +518,7 @@ export default function VideoGenerator() {
             <div className="mt-1 flex items-end justify-between gap-2 px-1">
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
                 <span className="inline-flex gap-1 rounded-lg bg-neutral-200 p-0.5 dark:bg-neutral-800">
-                  {([["t2v", "Teks"], ["i2v", "Gambar"]] as const).map(([m, label]) => (
+                  {([["t2v", t("video.mode.text")], ["i2v", t("video.mode.image")]] as const).map(([m, label]) => (
                     <button
                       key={m}
                       type="button"
@@ -510,16 +532,16 @@ export default function VideoGenerator() {
                           : "text-neutral-600 dark:text-neutral-300"
                       }`}
                     >
-                      {label} → Video
+                      {t("video.mode.toVideo", { mode: label })}
                     </button>
                   ))}
                 </span>
                 <span>{duration}s</span>
                 <span className="flex items-center gap-1">
                   <Zap size={12} className="text-primary" />
-                  {credits} Token
+                  {t("media.tokens", { n: credits })}
                 </span>
-                <span className="hidden sm:inline">{prompt.length} / {MAX_LEN.toLocaleString("id-ID")}</span>
+                <span className="hidden sm:inline">{prompt.length} / {MAX_LEN.toLocaleString(locale)}</span>
               </div>
               <button
                 type="button"
@@ -528,7 +550,7 @@ export default function VideoGenerator() {
                 className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Sparkles size={15} />
-                Buat
+                {t("video.create")}
               </button>
             </div>
           </div>
@@ -544,7 +566,7 @@ export default function VideoGenerator() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Detail video"
+            aria-label={t("video.detail")}
             onClick={(e) => e.stopPropagation()}
             className="flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-neutral-900 text-white shadow-2xl md:flex-row md:rounded-2xl"
           >
@@ -567,53 +589,53 @@ export default function VideoGenerator() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-green-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-green-400 border border-green-500/30">
-                    Selesai
+                    {t("media.done")}
                   </span>
                   <span className="rounded-full bg-neutral-800 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-neutral-300">
-                    {selected.mode === "i2v" ? "Gambar ke Video" : "Teks ke Video"}
+                    {selected.mode === "i2v" ? t("video.imageToVideo") : t("video.textToVideo")}
                   </span>
                 </div>
-                <button type="button" onClick={() => setSelected(null)} aria-label="Tutup" className="rounded-full p-1.5 text-neutral-400 transition hover:bg-neutral-800 hover:text-white">
+                <button type="button" onClick={() => setSelected(null)} aria-label={t("common.close")} className="rounded-full p-1.5 text-neutral-400 transition hover:bg-neutral-800 hover:text-white">
                   <X size={16} />
                 </button>
               </div>
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Prompt</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("video.prompt")}</p>
                 <p className="mt-1 text-sm text-neutral-200">{selected.prompt}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Model</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("video.model")}</p>
                   <p className="mt-1 text-sm font-semibold">{selected.session.model}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Rasio</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("video.ratio")}</p>
                   <p className="mt-1 text-sm font-semibold">{selected.session.ratio}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Durasi</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("video.duration")}</p>
                   <p className="mt-1 text-sm font-semibold">{selected.session.duration ?? 5}s</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Kredit</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("video.credits")}</p>
                   <p className="mt-1 flex items-center gap-1 text-sm font-semibold">
                     <Zap size={12} className="text-primary" />
                     {models.find((m) => m.id === selected.session.model)?.credits ?? "-"}
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-neutral-500">{expiryLabel(selected.session.created_at)}</p>
+              <p className="text-xs text-neutral-500">{expiryLabel(t, selected.session.created_at)}</p>
               <a href={selected.url} download target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-hover">
                 <Download size={15} />
-                Unduh MP4
+                {t("video.downloadMp4")}
               </a>
               <button type="button" onClick={() => recreate(selected)} className="flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800">
                 <RotateCcw size={14} />
-                Buat Ulang
+                {t("video.recreate")}
               </button>
               <button type="button" onClick={() => removeItem(selected)} className="flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm text-neutral-500 transition hover:bg-neutral-800 hover:text-red-400">
                 <Trash2 size={14} />
-                Hapus
+                {t("media.delete")}
               </button>
             </div>
           </div>

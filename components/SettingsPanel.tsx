@@ -9,6 +9,7 @@ import {
   listChatSessions,
 } from "@/lib/chat-history";
 import { currentUserId } from "@/lib/current-user";
+import { useT } from "@/lib/i18n";
 import { loadMediaHistory } from "@/lib/media-history";
 import {
   fetchDevices,
@@ -44,6 +45,7 @@ const btnDanger =
   "rounded-xl border border-red-200 px-4 py-2 text-sm text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950";
 
 export default function SettingsPanel() {
+  const { t, locale } = useT();
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
   const [devices, setDevices] = useState<Device[]>([]);
@@ -101,13 +103,13 @@ export default function SettingsPanel() {
   function changeModel(v: string) {
     setModel(v);
     saveAppSettings({ defaultModel: v, language: lang });
-    flash("Model default disimpan.");
+    flash(t("settings.chat.modelSaved"));
   }
 
   function wipeChats() {
-    if (!window.confirm("Hapus semua riwayat obrolan?")) return;
+    if (!window.confirm(t("settings.chat.wipeConfirm"))) return;
     listChatSessions().forEach((s) => void deleteChatSession(s.id));
-    flash("Semua riwayat obrolan dihapus.");
+    flash(t("settings.chat.deleted"));
   }
 
   function downloadData() {
@@ -142,13 +144,13 @@ export default function SettingsPanel() {
       const res = await fetch("/api/v1/auth/dev-login", { method: "POST", credentials: "include" });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-        setAccountError(data.error?.message ?? "Gagal masuk sebagai dev.");
+        setAccountError(data.error?.message ?? t("settings.account.devFailed"));
         setAccountBusy(false);
         return;
       }
       window.location.href = "/dashboard";
     } catch {
-      setAccountError("Gagal beralih akun. Coba lagi.");
+      setAccountError(t("settings.account.switchFailed"));
       setAccountBusy(false);
     }
   }
@@ -165,7 +167,7 @@ export default function SettingsPanel() {
   }
 
   function eraseData() {
-    if (!window.confirm("Hapus semua dataku di perangkat ini? Tidak bisa dibatalkan.")) return;
+    if (!window.confirm(t("settings.privacy.eraseConfirm"))) return;
     const uid = currentUserId();
     try {
       const gone: string[] = [];
@@ -178,15 +180,15 @@ export default function SettingsPanel() {
       // abaikan
     }
     setDevices(listDevices());
-    flash("Data di perangkat ini dihapus.");
+    flash(t("settings.privacy.erased"));
   }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 overflow-y-auto px-4 py-6 md:px-6">
       <div>
-        <h1 className="text-xl font-semibold text-neutral-900 md:text-2xl dark:text-white">Pengaturan</h1>
+        <h1 className="text-xl font-semibold text-neutral-900 md:text-2xl dark:text-white">{t("settings.title")}</h1>
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          Profil, perangkat, workspace, dan preferensimu.
+          {t("settings.subtitle")}
         </p>
       </div>
 
@@ -196,45 +198,45 @@ export default function SettingsPanel() {
         </p>
       )}
 
-      <Section title="Profil" desc="Nama & kontak — tampil di kartu profil sidebar (users.name, PRD 5.3).">
+      <Section title={t("settings.profile.title")} desc={t("settings.profile.desc")}>
         <div className="flex flex-col gap-2.5">
-          <input aria-label="Nama" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama" className={inputCls} />
-          <input aria-label="No. WA / email" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="No. WA / email" className={inputCls} />
+          <input aria-label={t("settings.profile.name")} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("settings.profile.name")} className={inputCls} />
+          <input aria-label={t("settings.profile.contact")} value={contact} onChange={(e) => setContact(e.target.value)} placeholder={t("settings.profile.contact")} className={inputCls} />
           <div>
             <button
               type="button"
               className={btnPrimary}
               onClick={async () => {
-                const next = await saveProfileRemote({ name: name.trim() || "Tanpa Nama", contact: contact.trim(), avatarUrl: null });
+                const next = await saveProfileRemote({ name: name.trim() || t("settings.profile.noName"), contact: contact.trim(), avatarUrl: null });
                 setName(next.name);
                 setContact(next.contact);
-                flash("Profil disimpan.");
+                flash(t("settings.profile.saved"));
               }}
             >
-              Simpan Profil
+              {t("settings.profile.save")}
             </button>
           </div>
         </div>
       </Section>
 
-      <Section title="Perangkat" desc="Maks 2 device aktif — device ke-3 menendang yang terlama (PRD Section 2).">
+      <Section title={t("settings.devices.title")} desc={t("settings.devices.desc", { n: 2 })}>
         {devices.length === 0 ? (
-          <p className="text-sm text-neutral-400">Tidak ada perangkat.</p>
+          <p className="text-sm text-neutral-400">{t("settings.devices.empty")}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {devices.map((d) => (
               <li key={d.id} className="flex items-center gap-3 rounded-xl border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium text-neutral-900 dark:text-white">
-                    {d.label} {d.current && "· ini"}
+                    {d.label} {d.current && t("settings.devices.this")}
                   </span>
                   <span className="block text-xs text-neutral-500">
-                    Aktif {new Date(d.lastActive).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
+                    {t("settings.devices.active", { date: new Date(d.lastActive).toLocaleDateString(locale, { day: "numeric", month: "short" }) })}
                   </span>
                 </span>
                 {!d.current && (
                   <button type="button" className={btnDanger} onClick={async () => setDevices(await revokeDeviceRemote(d.id))}>
-                    Cabut
+                    {t("settings.devices.revoke")}
                   </button>
                 )}
               </li>
@@ -243,79 +245,81 @@ export default function SettingsPanel() {
         )}
       </Section>
 
-      <Section title="Workspace" desc="Sisa Token & masa aktif — read-only (GET /api/v1/workspace, PRD 7.4).">
+      <Section title={t("settings.workspace.title")} desc={t("settings.workspace.desc")}>
         <div className="flex flex-wrap gap-2 text-sm">
           <span className="rounded-full border border-neutral-200 px-3 py-1 font-medium text-primary dark:border-neutral-700">
-            {(workspace?.tokenBalance ?? 1500).toLocaleString("id-ID")} Token
+            {(workspace?.tokenBalance ?? 1500).toLocaleString(locale)} Token
           </span>
           <span className="rounded-full border border-neutral-200 px-3 py-1 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-            Aktif Sampai {workspace?.expiresAtLabel ?? "…"}
+            {t("settings.workspace.until", {
+              date: workspace?.expiresAt
+                ? new Date(workspace.expiresAt).toLocaleDateString(locale, { day: "numeric", month: "long" })
+                : "…",
+            })}
           </span>
         </div>
       </Section>
 
-      <Section title="Akun" desc="Akun customer yang sedang dipakai dashboard (cookie ftai_session).">
+      <Section title={t("settings.account.title")} desc={t("settings.account.desc")}>
         <div className="flex flex-col gap-2.5">
           <p className="text-sm text-neutral-700 dark:text-neutral-200">
-            Masuk sebagai <span className="font-medium text-neutral-900 dark:text-white">{name || "Tanpa Nama"}</span>
+            {t("settings.account.signedIn")} <span className="font-medium text-neutral-900 dark:text-white">{name || t("settings.profile.noName")}</span>
             {contact && <span className="text-neutral-500 dark:text-neutral-400"> · {contact}</span>}
           </p>
           {process.env.NODE_ENV !== "production" && (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Mode pengembangan: beralih ke <span className="font-medium">dev@example.com</span> (workspace 1.500 Token).
-              Cookie admin console tidak terpengaruh.
+              {t("settings.account.devMode", { email: "dev@example.com" })}
             </p>
           )}
           {accountError && <p className="text-sm text-red-600 dark:text-red-400">{accountError}</p>}
           <div className="flex flex-wrap gap-2.5">
             {process.env.NODE_ENV !== "production" && (
               <button type="button" className={btnPrimary} disabled={accountBusy} onClick={switchToDev}>
-                {accountBusy ? "Memproses…" : "Masuk sebagai Dev (Customer)"}
+                {accountBusy ? t("settings.account.processing") : t("settings.account.devLogin")}
               </button>
             )}
             <button type="button" className={btnGhost} disabled={accountBusy} onClick={logout}>
-              Keluar
+              {t("settings.account.signOut")}
             </button>
           </div>
         </div>
       </Section>
 
-      <Section title="Tampilan" desc="Dark mode manual wajib didukung (PRD 4.5).">
+      <Section title={t("settings.appearance.title")} desc={t("settings.appearance.desc")}>
         <div className="flex flex-wrap items-center gap-2.5">
           <button type="button" className={btnGhost} onClick={toggleTheme}>
-            {isDark ? "Mode Terang" : "Mode Gelap"}
+            {isDark ? t("settings.appearance.light") : t("settings.appearance.dark")}
           </button>
-          <select aria-label="Bahasa" value={lang} onChange={(e) => changeLang(e.target.value as "id" | "en")} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-white">
+          <select aria-label={t("settings.appearance.lang")} value={lang} onChange={(e) => changeLang(e.target.value as "id" | "en")} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-white">
             <option value="id">Bahasa Indonesia</option>
             <option value="en">English</option>
           </select>
         </div>
       </Section>
 
-      <Section title="Chat" desc="Model default untuk obrolan baru + kelola riwayat (PRD 7.4).">
+      <Section title={t("settings.chat.title")} desc={t("settings.chat.desc")}>
         <div className="flex flex-wrap items-center gap-2.5">
-          <select aria-label="Model default" value={model} onChange={(e) => changeModel(e.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-white">
+          <select aria-label={t("settings.chat.defaultModel")} value={model} onChange={(e) => changeModel(e.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-white">
             {modelCatalog.map((m) => (
               <option key={`${m.provider ?? "model"}-${m.id}`} value={m.id}>{m.label}</option>
             ))}
           </select>
           <button type="button" className={btnDanger} onClick={wipeChats}>
-            Hapus Semua Riwayat
+            {t("settings.chat.deleteAll")}
           </button>
         </div>
       </Section>
 
-      <Section title="Privasi & Data" desc="Unduh / hapus datamu sesuai UU PDP (NFR #7).">
+      <Section title={t("settings.privacy.title")} desc={t("settings.privacy.desc")}>
         <div className="flex flex-wrap gap-2.5">
-          <button type="button" className={btnGhost} onClick={downloadData}>Unduh Dataku</button>
-          <button type="button" className={btnDanger} onClick={eraseData}>Hapus Dataku</button>
+          <button type="button" className={btnGhost} onClick={downloadData}>{t("settings.privacy.download")}</button>
+          <button type="button" className={btnDanger} onClick={eraseData}>{t("settings.privacy.erase")}</button>
         </div>
       </Section>
 
-      <Section title="Tentang" desc="Versi & aturan main Token.">
+      <Section title={t("settings.about.title")} desc={t("settings.about.desc")}>
         <p className="text-sm text-neutral-600 dark:text-neutral-300">
-          RestoAI v1.5 — Workspace 7 hari, Token auto-extend +7 hari tiap aksi berbayar saat saldo &gt; 0 (PRD Section 2).
-          Butuh bantuan? Hubungi kasir restoran pilot.
+          {t("settings.about.text")}
         </p>
       </Section>
     </div>

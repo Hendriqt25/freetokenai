@@ -86,15 +86,64 @@ async function deduct(workspaceId: string, cost: number): Promise<Deduction | nu
   return out;
 }
 
+// ponytail: atribusi cafe untuk usage_logs — workspace dulu, fallback ke key.
+async function resolveCafeId(
+  tx: any,
+  workspaceId: string | null,
+  apiKeyId: string | null,
+): Promise<string | null> {
+  if (workspaceId) {
+    const rows = (await tx`
+      SELECT cafe_id FROM workspaces WHERE id = ${workspaceId} LIMIT 1`) as unknown as {
+      cafe_id: string | null;
+    }[];
+    if (rows[0]?.cafe_id) return rows[0].cafe_id;
+  }
+  if (apiKeyId) {
+    const rows = (await tx`
+      SELECT cafe_id FROM api_keys WHERE id = ${apiKeyId} LIMIT 1`) as unknown as {
+      cafe_id: string | null;
+    }[];
+    return rows[0]?.cafe_id ?? null;
+  }
+  return null;
+}
+
+// ponytail: counter monitoring. Request ber-key -> key itu; request dashboard
+// (tanpa key) -> semua key aktif milik workspace tersebut, supaya angka
+// "terpakai" di Monitoring API Key ikut saldo workspace yang benar-benar burn.
+async function syncKeyUsage(
+  tx: any,
+  workspaceId: string | null,
+  apiKeyId: string | null,
+  delta: number,
+) {
+  if (apiKeyId) {
+    await tx`
+      UPDATE api_keys SET tokens_used = GREATEST(tokens_used + ${delta}, 0),
+        last_used_at = CASE WHEN ${delta} > 0 THEN now() ELSE last_used_at END
+      WHERE id = ${apiKeyId}`;
+    return;
+  }
+  if (workspaceId) {
+    await tx`
+      UPDATE api_keys SET tokens_used = GREATEST(tokens_used + ${delta}, 0),
+        last_used_at = CASE WHEN ${delta} > 0 THEN now() ELSE last_used_at END
+      WHERE workspace_id = ${workspaceId} AND is_active = TRUE AND revoked_at IS NULL`;
+  }
+}
+
 async function logBurn(workspaceId: string, cost: number, meta: BillingMeta, ledgerId: string) {
   await sql.begin(async (tx) => {
+    const cafeId = await resolveCafeId(tx, workspaceId, meta.apiKeyId ?? null);
     const usage = (await tx`
-      INSERT INTO usage_logs (workspace_id, api_key_id, model_id, tokens_burned, endpoint_type, status, media_url)
-      VALUES (${workspaceId}, ${meta.apiKeyId ?? null}, ${meta.modelId}, ${cost}, ${meta.endpointType}, 'success', ${meta.mediaUrl ?? null})
+      INSERT INTO usage_logs (workspace_id, api_key_id, cafe_id, model_id, tokens_burned, endpoint_type, status, media_url)
+      VALUES (${workspaceId}, ${meta.apiKeyId ?? null}, ${cafeId}, ${meta.modelId}, ${cost}, ${meta.endpointType}, 'success', ${meta.mediaUrl ?? null})
       RETURNING id`) as unknown as { id: string }[];
     await tx`
       UPDATE token_transactions SET reference_type = 'usage_log', reference_id = ${usage[0].id}
       WHERE id = ${ledgerId}`;
+    await syncKeyUsage(tx, workspaceId, meta.apiKeyId ?? null, cost);
     meta.onUsageLogged?.(usage[0].id);
   });
 }
@@ -105,10 +154,12 @@ async function refund(workspaceId: string, cost: number, meta: BillingMeta, ledg
       UPDATE workspaces SET token_balance = token_balance + ${cost}
       WHERE id = ${workspaceId} RETURNING token_balance`) as unknown as { token_balance: number }[];
     const balance = rows[0]?.token_balance ?? 0;
+    const cafeId = await resolveCafeId(tx, workspaceId, meta.apiKeyId ?? null);
     const usage = (await tx`
-      INSERT INTO usage_logs (workspace_id, api_key_id, model_id, tokens_burned, endpoint_type, status, media_url)
-      VALUES (${workspaceId}, ${meta.apiKeyId ?? null}, ${meta.modelId}, ${cost}, ${meta.endpointType}, 'refunded', ${meta.mediaUrl ?? null})
+      INSERT INTO usage_logs (workspace_id, api_key_id, cafe_id, model_id, tokens_burned, endpoint_type, status, media_url)
+      VALUES (${workspaceId}, ${meta.apiKeyId ?? null}, ${cafeId}, ${meta.modelId}, ${cost}, ${meta.endpointType}, 'refunded', ${meta.mediaUrl ?? null})
       RETURNING id`) as unknown as { id: string }[];
+    await syncKeyUsage(tx, workspaceId, meta.apiKeyId ?? null, -cost);
     await tx`
       INSERT INTO token_transactions (workspace_id, type, amount, balance_after, reference_type, reference_id)
       VALUES (${workspaceId}, 'refund', ${cost}, ${balance}, 'usage_log', ${usage[0].id})`;
@@ -156,15 +207,83 @@ export async function withTokens<T extends NextResponse>(
   return res;
 }
 
-export type ValidKey = { id: string; workspace_id: string };
+export type ValidKey = { id: string; workspace_id: string | null; cafe_id: string | null };
 
-// ponytail: key mentah -> SHA-256 hex -> api_keys (is_active). Hash 1 arah,
-// DB tak pernah simpan key asli (NFR #2).
+export class InsufficientKeyQuotaError extends Error {
+  remaining: number;
+  constructor(remaining: number) {
+    super("Kuota API key tidak cukup.");
+    this.remaining = remaining;
+  }
+}
+
+async function keyQuotaRemaining(keyId: string): Promise<number> {
+  const rows = (await sql`
+    SELECT GREATEST(token_quota - tokens_used, 0)::int AS remaining
+    FROM api_keys WHERE id = ${keyId}`) as unknown as { remaining: number }[];
+  return rows[0]?.remaining ?? 0;
+}
+
+// ponytail: key kafe tanpa workspace (terbitan kasir). Kuotanya sudah dipotong
+// dari saldo prepaid cafe saat terbit, jadi pemakaian ditagih ke kuota key —
+// bukan ke workspaces.token_balance. Charge atomik sebelum vendor; refund bila gagal.
+export async function withKeyTokens<T extends NextResponse>(
+  keyId: string,
+  cafeId: string | null,
+  baseCost: number,
+  fn: () => Promise<T>,
+  meta: BillingMeta,
+): Promise<T> {
+  const cost = Math.max(1, Math.ceil(baseCost * (meta.units ?? 1)));
+  const charged = (await sql`
+    UPDATE api_keys SET tokens_used = tokens_used + ${cost}, last_used_at = now()
+    WHERE id = ${keyId} AND is_active = TRUE AND revoked_at IS NULL
+      AND (expires_at IS NULL OR expires_at > now())
+      AND tokens_used + ${cost} <= token_quota
+    RETURNING tokens_used`) as unknown as { tokens_used: number }[];
+  if (!charged[0]) throw new InsufficientKeyQuotaError(await keyQuotaRemaining(keyId));
+
+  const reqId = newRequestId();
+  const t0 = Date.now();
+  const done = (status: number, ok: boolean, note?: string) =>
+    logReq({ reqId, workspaceId: null, endpoint: meta.endpointType, latencyMs: Date.now() - t0, status, ok, note });
+
+  const logUsage = async (status: "success" | "refunded", delta: number) => {
+    if (delta !== 0)
+      await sql`UPDATE api_keys SET tokens_used = GREATEST(tokens_used + ${delta}, 0) WHERE id = ${keyId}`;
+    await sql`
+      INSERT INTO usage_logs (workspace_id, api_key_id, cafe_id, model_id, tokens_burned, endpoint_type, status, media_url)
+      VALUES (NULL, ${keyId}, ${cafeId}, ${meta.modelId}, ${cost}, ${meta.endpointType}, ${status}, ${meta.mediaUrl ?? null})`;
+  };
+
+  let res: T;
+  try {
+    res = await fn();
+  } catch (e) {
+    await logUsage("refunded", -cost);
+    done(500, false, "throw->refund");
+    throw e;
+  }
+  if (!res.ok && res.status !== 402) {
+    await logUsage("refunded", -cost);
+    done(res.status, false, "fail->refund");
+    return res;
+  }
+  await logUsage("success", 0);
+  done(res.status, true);
+  return res;
+}
+
+// ponytail: key mentah -> SHA-256 hex -> api_keys (aktif, belum revoke, belum expired).
+// Hash 1 arah, DB tak pernah simpan key asli (NFR #2).
 export async function validateApiKey(raw: string): Promise<ValidKey | null> {
   const hash = createHash("sha256").update(raw).digest("hex");
   const rows = (await sql`
-    SELECT ak.id, ak.workspace_id FROM api_keys ak
-    WHERE ak.key_hash = ${hash} AND ak.is_active = TRUE LIMIT 1`) as unknown as ValidKey[];
+    SELECT ak.id, ak.workspace_id, ak.cafe_id FROM api_keys ak
+    WHERE ak.key_hash = ${hash} AND ak.is_active = TRUE
+      AND ak.revoked_at IS NULL
+      AND (ak.expires_at IS NULL OR ak.expires_at > now())
+    LIMIT 1`) as unknown as ValidKey[];
   return rows[0] ?? null;
 }
 

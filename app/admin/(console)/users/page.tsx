@@ -75,6 +75,9 @@ export default function AdminUsersPage() {
     cafe_id: '',
     password: '',
   });
+  // Input manual cafe baru saat menambah kasir
+  const [cafeMode, setCafeMode] = useState<'select' | 'manual'>('select');
+  const [manualCafeName, setManualCafeName] = useState('');
 
   // Form fields for Edit / Reset Password
   const [editFormData, setEditFormData] = useState({
@@ -129,6 +132,22 @@ export default function AdminUsersPage() {
     setError('');
 
     try {
+      // Kasir boleh pakai cafe yang sudah ada (dropdown) atau ketik nama cafe baru.
+      let cafeId = formData.cafe_id;
+      if (formData.role === 'kasir' && cafeMode === 'manual') {
+        const cafeName = manualCafeName.trim();
+        if (cafeName.length < 2) throw new Error('Nama cafe manual wajib 2–150 karakter.');
+        const cafeRes = await fetch('/api/v1/admin/cafes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ name: cafeName }),
+        });
+        const cafeData = await cafeRes.json().catch(() => null);
+        if (!cafeRes.ok) throw new Error(cafeData?.error?.message ?? 'Gagal membuat cafe baru.');
+        cafeId = cafeData.cafe.id;
+      }
+
       const res = await fetch('/api/v1/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,7 +157,7 @@ export default function AdminUsersPage() {
           email: formData.email,
           phone_number: formData.phone_number,
           role: formData.role,
-          cafe_id: formData.role === 'kasir' ? formData.cafe_id : null,
+          cafe_id: formData.role === 'kasir' ? cafeId : null,
           password: formData.password,
         }),
       });
@@ -146,7 +165,11 @@ export default function AdminUsersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message ?? 'Gagal membuat pengguna');
 
-      showNotice(`Pengguna ${data.user.name || data.user.email} berhasil dibuat.`);
+      showNotice(
+        cafeMode === 'manual' && formData.role === 'kasir'
+          ? `Cafe "${manualCafeName.trim()}" dan akun ${data.user.name || data.user.email} berhasil dibuat.`
+          : `Pengguna ${data.user.name || data.user.email} berhasil dibuat.`,
+      );
       setIsAddModalOpen(false);
       setFormData({
         name: '',
@@ -156,6 +179,8 @@ export default function AdminUsersPage() {
         cafe_id: '',
         password: '',
       });
+      setCafeMode('select');
+      setManualCafeName('');
       loadData();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal menyimpan data');
@@ -556,22 +581,63 @@ export default function AdminUsersPage() {
 
               {formData.role === 'kasir' && (
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-                    Pilih Cafe Cabang <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.cafe_id}
-                    onChange={(e) => setFormData({ ...formData, cafe_id: e.target.value })}
-                    required
-                    className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary"
-                  >
-                    <option value="">-- Pilih Cafe --</option>
-                    {cafes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                      Cafe Cabang <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-900 p-0.5">
+                      {(
+                        [
+                          { id: 'select', label: 'Pilih' },
+                          { id: 'manual', label: 'Ketik Manual' },
+                        ] as const
+                      ).map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setCafeMode(m.id)}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition ${
+                            cafeMode === m.id
+                              ? 'bg-white dark:bg-neutral-700 text-primary shadow-sm'
+                              : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {cafeMode === 'select' ? (
+                    <select
+                      value={formData.cafe_id}
+                      onChange={(e) => setFormData({ ...formData, cafe_id: e.target.value })}
+                      required
+                      className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary"
+                    >
+                      <option value="">-- Pilih Cafe --</option>
+                      {cafes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        placeholder="cth. Kopi Senja Cabang Dago"
+                        maxLength={150}
+                        value={manualCafeName}
+                        onChange={(e) => setManualCafeName(e.target.value)}
+                        required
+                        className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary"
+                      />
+                      <p className="mt-1 text-[11px] text-neutral-400">
+                        Cafe baru dibuat otomatis (slug dari nama) lalu kasir langsung terhubung ke sana.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 

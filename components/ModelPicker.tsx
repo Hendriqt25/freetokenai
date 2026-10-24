@@ -6,6 +6,7 @@ import { ChevronDown, Zap } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CatalogModel } from "@/lib/model-catalog";
+import { useT } from "@/lib/i18n";
 
 export default function ModelPicker({
   models,
@@ -21,13 +22,14 @@ export default function ModelPicker({
   /** Keterangan harga, mis. "per 1.000 token" — default "per generate". */
   priceNote?: string;
 }) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ bottom: number; left: number; width: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const current = models.find((m) => m.id === value) ?? models[0];
   // Chat ditagih metered per 1.000 token; tampilkan "/1K" agar "10" tidak terbaca biaya tetap.
-  const perThousand = Boolean(priceNote && /1\.000/i.test(priceNote));
+  const perThousand = Boolean(priceNote && /1[.,]000/i.test(priceNote));
 
   // ponytail: menu di-portal ke <body> — composer berada di dalam container
   // `overflow-hidden`, jadi menu absolute biasa terpotong/tertutup dashboard.
@@ -53,8 +55,8 @@ export default function ModelPicker({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || btnRef.current?.contains(target)) return;
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
@@ -79,7 +81,7 @@ export default function ModelPicker({
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Model: ${current.label}, ${current.cost} Token`}
+        aria-label={t("model.aria", { label: current.label, cost: current.cost })}
         className="flex h-9 max-w-[9rem] items-center gap-1.5 rounded-full border border-neutral-200 pl-3 pr-2 text-xs text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 sm:max-w-[12rem] dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
       >
         <span className="truncate">{current.label}</span>
@@ -104,7 +106,7 @@ export default function ModelPicker({
             className="fixed z-[100] flex max-h-[min(16rem,50vh)] w-[min(20rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-800"
           >
             <p className="shrink-0 px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
-              Pilih model
+              {t("model.choose")}
             </p>
             <div className="min-h-0 flex-1 overflow-y-auto">
             {models.map((m, i) => (
@@ -134,8 +136,8 @@ export default function ModelPicker({
             </div>
             <p className="shrink-0 border-t border-neutral-100 px-3 py-1.5 text-[11px] leading-snug text-neutral-400 dark:border-neutral-700">
               {perThousand
-                ? "Token per 1.000 token (prompt + jawaban), dibulatkan ke atas."
-                : `Angka = Token terpotong ${priceNote ?? "per generate"}.`}
+                ? t("model.perThousand")
+                : t("model.costNote", { note: priceNote ?? "per generate" })}
             </p>
           </div>,
           document.body,

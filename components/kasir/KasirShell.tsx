@@ -206,11 +206,6 @@ export default function KasirShell({ children }: { children: React.ReactNode }) 
                 {error}
               </div>
             )}
-            {process.env.NODE_ENV !== "production" && (
-              <p className="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
-                Akun demo: kasir.kopi@example.com / Kasir123!
-              </p>
-            )}
             <label className="block text-sm">
               Email kasir{" "}
               <input

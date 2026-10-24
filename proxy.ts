@@ -3,9 +3,10 @@ import { logReq, newRequestId } from "@/lib/obs";
 
 // ponytail: NFR#5 — satu structured log ingress per request gateway /api/*
 // (rid, method, path). Latency + hasil + ws menyusul di withTokens (satu
-// choke point semua AI billing) — middleware tak bisa ukur durasi respons.
+// choke point semua AI billing) — proxy tak bisa ukur durasi respons.
 // Header keamanan dipasang untuk semua route (bukan cuma /api/*).
-export function middleware(req: NextRequest) {
+// Next 16: konvensi `middleware` deprecated -> `proxy` (runtime nodejs).
+export function proxy(req: NextRequest) {
   const reqId = newRequestId();
   const res = NextResponse.next();
   res.headers.set("x-request-id", reqId);

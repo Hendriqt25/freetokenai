@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   RotateCw,
 } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 
 interface KeyInfo {
   id: string;
@@ -50,6 +51,7 @@ interface ExistingBalance {
 }
 
 export default function UserDashboard() {
+  const { t, locale } = useT();
   const router = useRouter();
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [keyData, setKeyData] = useState<ValidatedKey | null>(null);
@@ -85,7 +87,7 @@ export default function UserDashboard() {
   const validateKey = async () => {
     const key = apiKeyInput.trim();
     if (!key) {
-      setError('Masukkan API Key terlebih dahulu.');
+      setError(t('auth.empty'));
       return;
     }
 
@@ -101,7 +103,7 @@ export default function UserDashboard() {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data?.error?.message || 'Validasi API key gagal.');
+        setError(data?.error?.message || t('auth.failed'));
         return;
       }
 
@@ -110,7 +112,7 @@ export default function UserDashboard() {
       setShowModal(false);
       setApiKeyInput('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Terjadi kesalahan validasi.');
+      setError(e instanceof Error ? e.message : t('auth.error'));
     } finally {
       setLoading(false);
     }
@@ -139,7 +141,7 @@ export default function UserDashboard() {
       <div className="flex min-h-screen items-center justify-center bg-neutral-50 dark:bg-neutral-950">
         <div className="text-center space-y-3">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-neutral-500">Memeriksa sesi pengguna...</p>
+          <p className="text-sm text-neutral-500">{t('user.checking')}</p>
         </div>
       </div>
     );
@@ -154,16 +156,16 @@ export default function UserDashboard() {
             <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <KeyRound size={28} />
             </div>
-            <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-50">Masukkan API Key</h1>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-50">{t('user.enterKey')}</h1>
             <p className="mt-2 text-xs md:text-sm text-neutral-600 dark:text-neutral-400">
-              Dapatkan API Key dari kasir cafe untuk mulai menggunakan layanan AI Workspace.
+              {t('user.enterKeyDesc')}
             </p>
           </div>
 
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
-                API Key Kafe
+                {t('user.cafeKey')}
               </label>
               <input
                 type="password"
@@ -190,15 +192,15 @@ export default function UserDashboard() {
               {loading ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  <span>Memvalidasi...</span>
+                  <span>{t('user.validating')}</span>
                 </>
               ) : (
-                'Validasi & Buka Dashboard'
+                t('user.validateOpen')
               )}
             </button>
 
             <p className="text-center text-[11px] text-neutral-400">
-              API key tercetak pada struk belanja Anda dengan format <code>rst_live_...</code>
+              {t('user.keyReceipt')} <code>rst_live_...</code>
             </p>
           </div>
         </div>
@@ -220,7 +222,7 @@ export default function UserDashboard() {
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary">
                 <ShieldCheck size={12} />
-                Sesi Aktif
+                {t('user.activeSession')}
               </span>
               {cafeTitle && (
                 <span className="inline-flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
@@ -230,10 +232,10 @@ export default function UserDashboard() {
               )}
             </div>
             <h1 className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-50 mt-1">
-              User Dashboard
+              {t('user.dashboard')}
             </h1>
             <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
-              Kelola token dan akses layanan AI kafe
+              {t('user.subtitle')}
             </p>
           </div>
 
@@ -242,7 +244,7 @@ export default function UserDashboard() {
             className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700 transition"
           >
             <RotateCw size={14} />
-            <span>Ganti Key</span>
+            <span>{t('user.changeKey')}</span>
           </button>
         </div>
 
@@ -251,36 +253,36 @@ export default function UserDashboard() {
           <div className="border-b border-neutral-100 bg-gradient-to-r from-emerald-500/10 to-transparent px-6 py-4 dark:border-neutral-800">
             <h2 className="flex items-center gap-2 text-base font-semibold text-neutral-900 dark:text-neutral-50">
               <Coins className="text-emerald-500" size={18} />
-              Saldo Token Anda
+              {t('user.balanceTitle')}
             </h2>
           </div>
 
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-xl bg-neutral-50 p-4 dark:bg-neutral-800/50 border border-neutral-100 dark:border-neutral-800">
-                <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Sisa Kuota Token</div>
+                <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{t('user.remaining')}</div>
                 <div className="mt-2 text-3xl md:text-4xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                  {remainingTokens.toLocaleString('id-ID')}
+                  {remainingTokens.toLocaleString(locale)}
                 </div>
-                <div className="mt-1 text-[11px] text-neutral-400">Siap digunakan untuk chat AI</div>
+                <div className="mt-1 text-[11px] text-neutral-400">{t('user.ready')}</div>
               </div>
 
               <div className="rounded-xl bg-neutral-50 p-4 dark:bg-neutral-800/50 border border-neutral-100 dark:border-neutral-800 flex flex-col justify-between">
                 <div>
                   <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
                     <Calendar size={12} />
-                    Masa Berlaku
+                    {t('user.validity')}
                   </div>
                   <div className="mt-2 text-base font-bold text-neutral-800 dark:text-neutral-200">
-                    {expiresAt ? new Date(expiresAt).toLocaleDateString('id-ID', {
+                    {expiresAt ? new Date(expiresAt).toLocaleDateString(locale, {
                       day: 'numeric',
                       month: 'long',
                       year: 'numeric',
-                    }) : 'Tidak terbatas'}
+                    }) : t('user.unlimited')}
                   </div>
                 </div>
                 <div className="text-[11px] text-neutral-400 mt-2">
-                  Setelah tanggal ini, token tidak dapat digunakan.
+                  {t('user.afterDate')}
                 </div>
               </div>
             </div>
@@ -292,11 +294,11 @@ export default function UserDashboard() {
           <div className="max-w-md space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white backdrop-blur-sm">
               <Sparkles size={14} />
-              Workspace AI Siap
+              {t('user.workspaceReady')}
             </div>
-            <h2 className="text-2xl font-bold">Mulai Percakapan AI</h2>
+            <h2 className="text-2xl font-bold">{t('user.startChat')}</h2>
             <p className="text-xs md:text-sm text-white/80 leading-relaxed">
-              Tanyakan apa saja, buat konten, analisis data, atau diskusikan ide bisnis langsung dari meja kafe Anda.
+              {t('user.startChatDesc')}
             </p>
           </div>
 
@@ -306,7 +308,7 @@ export default function UserDashboard() {
               className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-bold text-primary shadow-md hover:bg-neutral-100 transition-all"
             >
               <MessageSquare size={18} />
-              <span>Buka Chat AI Sekarang</span>
+              <span>{t('user.openChat')}</span>
               <ArrowRight size={16} />
             </Link>
           </div>

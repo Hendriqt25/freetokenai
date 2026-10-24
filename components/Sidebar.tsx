@@ -20,15 +20,17 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CHAT_CHANGED, CHAT_NEW, deleteChatSession, hydrateSessions, listChatSessions, type ChatSession } from "@/lib/chat-history";
 import { CHAT_JOBS_CHANGED } from "@/lib/chat-jobs";
+import { useT, type TKey } from "@/lib/i18n";
 import { DEFAULT_PROFILE, fetchProfile, getProfile, SETTINGS_CHANGED, type UserProfile } from "@/lib/settings";
 
-const navItems = [
-  { label: "Bikin Gambar", icon: ImageIcon, href: "/dashboard/image" },
-  { label: "Bikin Video", icon: VideoIcon, href: "/dashboard/video" },
-  { label: "Developer API", icon: Code2, href: "/dashboard/developer" },
+const navItems: { label: TKey; icon: typeof ImageIcon; href: string }[] = [
+  { label: "sidebar.image", icon: ImageIcon, href: "/dashboard/image" },
+  { label: "sidebar.video", icon: VideoIcon, href: "/dashboard/video" },
+  { label: "sidebar.developer", icon: Code2, href: "/dashboard/developer" },
 ];
 
 export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
+  const { t } = useT();
   const [historyOpen, setHistoryOpen] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -100,7 +102,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
                 <button
                   type="button"
                   onClick={() => setCollapsed(true)}
-                  aria-label="Kecilkan sidebar"
+                  aria-label={t("sidebar.collapse")}
                   className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-200/60 lg:flex dark:text-neutral-400 dark:hover:bg-neutral-800"
                 >
                   <PanelLeftClose size={16} />
@@ -108,7 +110,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
                 <button
                   type="button"
                   onClick={onClose}
-                  aria-label="Tutup menu"
+                  aria-label={t("sidebar.closeMenu")}
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-200/60 lg:hidden dark:text-neutral-400 dark:hover:bg-neutral-800"
                 >
                   <X size={16} />
@@ -122,7 +124,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
               <button
                 type="button"
                 onClick={() => setCollapsed(false)}
-                aria-label="Perbesar sidebar"
+                aria-label={t("sidebar.expand")}
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-200/60 dark:text-neutral-400 dark:hover:bg-neutral-800"
               >
                 <PanelLeftOpen size={16} />
@@ -134,31 +136,36 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
             <button
               type="button"
               onClick={newChat}
-              title={collapsed ? "Obrolan Baru" : undefined}
+              title={collapsed ? t("sidebar.newChat") : undefined}
               className={`flex w-full items-center rounded-xl bg-primary py-2 text-sm font-medium text-white transition hover:bg-primary-hover ${
                 collapsed ? "justify-center px-0" : "gap-3 px-2.5"
               }`}
             >
               <Plus size={16} className="shrink-0" />
-              {!collapsed && "Obrolan Baru"}
+              {!collapsed && t("sidebar.newChat")}
             </button>
           </div>
 
           <nav className="mt-3 flex flex-col gap-1 px-4">
-            {navItems.map(({ label, icon: Icon, href }) => (
-              <Link
-                key={label}
-                href={href}
-                onClick={onClose}
-                title={collapsed ? label : undefined}
-                className={`flex items-center rounded-lg text-[13px] text-neutral-700 transition hover:bg-neutral-200/60 dark:text-neutral-200 dark:hover:bg-neutral-800 ${
-                  collapsed ? "justify-center px-0 py-2" : "gap-3 px-3 py-2"
-                }`}
-              >
-                <Icon size={18} className="shrink-0" />
-                {!collapsed && label}
-              </Link>
-            ))}
+            {navItems.map(({ label, icon: Icon, href }) => {
+              const active = pathname === href || pathname.startsWith(`${href}/`);
+              return (
+                <Link
+                  key={label}
+                  href={href}
+                  onClick={onClose}
+                  title={collapsed ? t(label) : undefined}
+                  className={`flex items-center rounded-lg text-[13px] transition hover:bg-neutral-200/60 dark:hover:bg-neutral-800 ${
+                    active
+                      ? "bg-neutral-200/60 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-white"
+                      : "text-neutral-700 dark:text-neutral-200"
+                  } ${collapsed ? "justify-center px-0 py-2" : "gap-3 px-3 py-2"}`}
+                >
+                  <Icon size={18} className="shrink-0" />
+                  {!collapsed && t(label)}
+                </Link>
+              );
+            })}
           </nav>
 
           {!collapsed && (
@@ -168,7 +175,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
                 onClick={() => setHistoryOpen((open) => !open)}
                 className="flex items-center justify-between px-3 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
               >
-                Terbaru
+                {t("sidebar.recent")}
                 {historyOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
 
@@ -176,7 +183,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
                 <>
                   {sessions.length === 0 ? (
                     <p className="mt-1 px-3 py-2 text-[13px] text-neutral-400 dark:text-neutral-500">
-                      Belum ada obrolan.
+                      {t("sidebar.empty")}
                     </p>
                   ) : (
                     <ul className="mt-1 space-y-0.5">
@@ -199,8 +206,8 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
                             <button
                               type="button"
                               onClick={() => removeSession(s.id)}
-                              aria-label={`Hapus ${s.title}`}
-                              title="Hapus obrolan"
+                              aria-label={t("sidebar.deleteChatAria", { title: s.title })}
+                              title={t("sidebar.deleteChat")}
                               className="shrink-0 rounded-md p-1.5 text-neutral-400 opacity-0 transition hover:bg-neutral-200/60 hover:text-red-500 group-hover:opacity-100 dark:hover:bg-neutral-800"
                             >
                               <Trash2 size={13} />
@@ -234,19 +241,21 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
               className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:text-red-400 transition"
             >
               <LogOut size={14} />
-              <span>Keluar / Ganti Key</span>
+              <span>{t("sidebar.logout")}</span>
             </button>
           </div>
         )}
         <Link
           href="/dashboard/settings"
-          title={collapsed ? "Pengaturan" : undefined}
-          className={`flex items-center rounded-lg text-[13px] text-neutral-700 transition hover:bg-neutral-200/60 dark:text-neutral-200 dark:hover:bg-neutral-800 ${
-            collapsed ? "justify-center px-0 py-2" : "gap-3 px-3 py-2"
-          }`}
+          title={collapsed ? t("sidebar.settings") : undefined}
+          className={`flex items-center rounded-lg text-[13px] transition hover:bg-neutral-200/60 dark:hover:bg-neutral-800 ${
+            pathname.startsWith("/dashboard/settings")
+              ? "bg-neutral-200/60 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-white"
+              : "text-neutral-700 dark:text-neutral-200"
+          } ${collapsed ? "justify-center px-0 py-2" : "gap-3 px-3 py-2"}`}
         >
           <Settings size={18} className="shrink-0" />
-          {!collapsed && "Pengaturan"}
+          {!collapsed && t("sidebar.settings")}
         </Link>
 
         <div className="my-2 border-t border-neutral-200 dark:border-neutral-800" />

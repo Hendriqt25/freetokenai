@@ -3,6 +3,7 @@
 import { ChevronDown, Clock, Dices, Download, ImageIcon, Loader2, RotateCcw, Sparkles, Trash2, VideoIcon, X, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { loadMediaHistory, removeMediaAsset, type MediaSession } from "@/lib/media-history";
+import { useT, type Lang, type TKey } from "@/lib/i18n";
 import {
   MEDIA_HISTORY_CHANGED,
   MEDIA_JOBS_CHANGED,
@@ -20,51 +21,96 @@ type Kind = "image" | "video";
 
 const IMAGE_STYLES = ["Otomatis", "Fotorealistik", "Anime", "Ilustrasi 3D", "Minimalis", "Sinematik", "Poster"];
 
+const STYLE_KEYS: Record<string, TKey> = {
+  Otomatis: "media.style.auto",
+  Fotorealistik: "media.style.photo",
+  Anime: "media.style.anime",
+  "Ilustrasi 3D": "media.style.3d",
+  Minimalis: "media.style.minimal",
+  Sinematik: "media.style.cinematic",
+  Poster: "media.style.poster",
+};
+
 // ponytail: models[] di CONFIG = fallback statis; picker sebenarnya tarik katalog
 // dari /admin/models lewat /api/v1/models (state catalog di bawah).
 const CONFIG: Record<
   Kind,
-  { title: string; placeholder: string; models: { id: string; credits: number }[]; ratios: string[]; examples: string[]; randomIdeas: string[] }
+  {
+    title: TKey;
+    placeholder: TKey;
+    models: { id: string; credits: number }[];
+    ratios: string[];
+    examples: Record<Lang, string[]>;
+    randomIdeas: Record<Lang, string[]>;
+  }
 > = {
   image: {
-    title: "Bikin Gambar",
-    placeholder: "Tuliskan prompt kamu…",
+    title: "media.image.title",
+    placeholder: "media.image.placeholder",
     models: [
       { id: "nano-banana-2", credits: 3 },
       { id: "nano-banana-pro", credits: 50 },
       { id: "qwen-image", credits: 3 },
     ],
     ratios: ["1:1", "16:9", "9:16"],
-    examples: [
-      "Rumah kayu di tepi danau saat pagi, fotorealistik",
-      "Maskot restoran ramen, ilustrasi 3D lucu",
-      "Banner promo kopi 16:9, minimalis",
-    ],
-    randomIdeas: [
-      "Kucing astronot di atas awan warna pastel, ilustrasi 3D",
-      "Warung kopi di gang sempit Yogyakarta malam hari, sinematik",
-      "Poster lomba badminton kampus, bold dan meriah",
-    ],
+    examples: {
+      id: [
+        "Rumah kayu di tepi danau saat pagi, fotorealistik",
+        "Maskot restoran ramen, ilustrasi 3D lucu",
+        "Banner promo kopi 16:9, minimalis",
+      ],
+      en: [
+        "Wooden house by the lake in the morning, photorealistic",
+        "Cute ramen restaurant mascot, 3D illustration",
+        "Minimalist 16:9 coffee promo banner",
+      ],
+    },
+    randomIdeas: {
+      id: [
+        "Kucing astronot di atas awan warna pastel, ilustrasi 3D",
+        "Warung kopi di gang sempit Yogyakarta malam hari, sinematik",
+        "Poster lomba badminton kampus, bold dan meriah",
+      ],
+      en: [
+        "Astronaut cat above pastel clouds, 3D illustration",
+        "Coffee stall in a narrow Yogyakarta alley at night, cinematic",
+        "Campus badminton tournament poster, bold and festive",
+      ],
+    },
   },
   video: {
-    title: "Bikin Video",
-    placeholder: "Tuliskan prompt kamu…",
+    title: "media.video.title",
+    placeholder: "media.image.placeholder",
     models: [
       { id: "veo-3.1-lite", credits: 5 },
       { id: "veo-3.1-fast", credits: 40 },
       { id: "veo-3.1-quality", credits: 200 },
     ],
     ratios: ["1:1", "16:9", "9:16"],
-    examples: [
-      "Kamera mendekat perlahan ke rumah danau, kabut pagi",
-      "Uap mengepul dari mie ramen, sinematik",
-      "Barista menuang latte art, slow motion",
-    ],
-    randomIdeas: [
-      "Drone terbang di atas sawah saat matahari terbit, kabut tipis",
-      "Koki melempar mie ke wajan dengan api menyala, slow motion",
-      "Kota futuristik saat hujan neon di malam hari, sinematik",
-    ],
+    examples: {
+      id: [
+        "Kamera mendekat perlahan ke rumah danau, kabut pagi",
+        "Uap mengepul dari mie ramen, sinematik",
+        "Barista menuang latte art, slow motion",
+      ],
+      en: [
+        "Slow camera push toward the lake house, morning mist",
+        "Steam rising from ramen noodles, cinematic",
+        "Barista pouring latte art, slow motion",
+      ],
+    },
+    randomIdeas: {
+      id: [
+        "Drone terbang di atas sawah saat matahari terbit, kabut tipis",
+        "Koki melempar mie ke wajan dengan api menyala, slow motion",
+        "Kota futuristik saat hujan neon di malam hari, sinematik",
+      ],
+      en: [
+        "Drone flying over rice fields at sunrise, light mist",
+        "Chef tossing noodles into a flaming wok, slow motion",
+        "Futuristic city in neon rain at night, cinematic",
+      ],
+    },
   },
 };
 
@@ -73,21 +119,22 @@ const MAX_LEN = 5000;
 type FeedItem = { url: string; prompt: string; model: string; session: MediaSession };
 
 // ponytail: label relatif ala "41 menit lalu" + sisa expiry 30 hari (batas asset Vio).
-function timeAgo(iso: string): string {
+function timeAgo(t: (key: TKey, vars?: Record<string, string | number>) => string, iso: string): string {
   const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 1) return "baru saja";
-  if (mins < 60) return `${mins} menit lalu`;
+  if (mins < 1) return t("media.justNow");
+  if (mins < 60) return t("media.minutesAgo", { n: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} jam lalu`;
-  return `${Math.floor(hours / 24)} hari lalu`;
+  if (hours < 24) return t("media.hoursAgo", { n: hours });
+  return t("media.daysAgo", { n: Math.floor(hours / 24) });
 }
 
-function expiryLabel(iso: string): string {
+function expiryLabel(t: (key: TKey, vars?: Record<string, string | number>) => string, iso: string): string {
   const daysLeft = Math.ceil((new Date(iso).getTime() + 30 * 86400000 - Date.now()) / 86400000);
-  return daysLeft > 0 ? `Kedaluwarsa ${daysLeft} hari lagi` : "Sudah kedaluwarsa";
+  return daysLeft > 0 ? t("media.expiresIn", { n: daysLeft }) : t("media.expired");
 }
 
 export default function MediaStudio({ kind }: { kind: Kind }) {
+  const { t, lang, locale } = useT();
   const cfg = CONFIG[kind];
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState(cfg.models[0].id);
@@ -109,6 +156,9 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
   const valid = prompt.trim().length > 0;
   const Icon = kind === "image" ? ImageIcon : VideoIcon;
   const credits = (models.find((m) => m.id === model)?.credits ?? 0) * (kind === "image" ? count : 1);
+  const fresh = cfg.examples[lang] ?? cfg.examples.id;
+  const ideas = cfg.randomIdeas[lang] ?? cfg.randomIdeas.id;
+  const styleLabel = (s: string) => (STYLE_KEYS[s] ? t(STYLE_KEYS[s]) : s);
 
   // ponytail: tarik katalog model sesuai jenis (image/video) + refresh riwayat.
   useEffect(() => {
@@ -181,7 +231,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
   );
 
   function fillRandom() {
-    const pick = cfg.randomIdeas[Math.floor(Math.random() * cfg.randomIdeas.length)];
+    const pick = ideas[Math.floor(Math.random() * ideas.length)];
     setPrompt(pick);
   }
 
@@ -220,9 +270,9 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-white dark:bg-neutral-950">
       <header className="px-4 pt-4 md:px-6 md:pt-5">
-        <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{cfg.title}</h1>
+        <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t(cfg.title)}</h1>
         <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">
-          {kind === "image" ? "Teks ke gambar" : "Teks ke video"} via VioStudio.
+          {kind === "image" ? t("media.textToImage") : t("media.textToVideo")} via VioStudio.
         </p>
       </header>
 
@@ -233,12 +283,14 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-300">
               <Icon size={24} />
             </div>
-            <h2 className="text-lg font-medium text-neutral-900 dark:text-white">Belum ada hasil</h2>
+            <h2 className="text-lg font-medium text-neutral-900 dark:text-white">
+              {kind === "image" ? t("media.image.empty") : t("media.video.empty")}
+            </h2>
             <p className="max-w-sm text-sm text-neutral-500 dark:text-neutral-400">
-              Tulis prompt di bawah lalu tekan Buat — atau klik salah satu contoh.
+              {t("media.empty.desc")}
             </p>
             <div className="mt-2 flex w-full max-w-md flex-col gap-2">
-              {cfg.examples.map((ex) => (
+              {fresh.map((ex) => (
                 <button
                   key={ex}
                   type="button"
@@ -270,7 +322,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
                 key={`${item.session.id}-${i}`}
                 type="button"
                 onClick={() => setSelected(item)}
-                title={`${item.prompt} — klik untuk lihat detail`}
+                title={t("media.clickDetail", { prompt: item.prompt })}
                 className="group relative overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50 text-left dark:border-neutral-800 dark:bg-neutral-900"
               >
                 {kind === "image" ? (
@@ -281,12 +333,12 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
                 )}
                 <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
                   {kind === "image" ? <ImageIcon size={11} /> : <VideoIcon size={11} />}
-                  {kind === "image" ? "Gambar" : "Video"}
+                  {kind === "image" ? t("media.imageLabel") : t("media.videoLabel")}
                 </span>
                 <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[11px] text-white opacity-0 transition group-hover:opacity-100">
                   <Download size={11} />
                   <a href={item.url} download target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-                    Unduh
+                    {t("media.download")}
                   </a>
                 </span>
               </button>
@@ -297,7 +349,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
 
       {error && (
         <p className="mx-4 mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-600 md:mx-6 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
-          Gagal: {error}
+          {t("media.failed", { error })}
         </p>
       )}
 
@@ -309,9 +361,9 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
               models={models.map((m) => ({ id: m.id, label: m.label ?? m.id, cost: m.credits, provider: m.provider }))}
               value={model}
               onChange={changeModel}
-              priceNote={kind === "image" && count > 1 ? `per gambar, total ${credits} untuk ${count}×` : "per gambar"}
+              priceNote={kind === "image" && count > 1 ? t("media.pricePerImageTotal", { credits, count }) : t("media.pricePerImage")}
             />
-            <PillSelect value={ratio} options={cfg.ratios} onChange={setRatio} label="Rasio" />
+            <PillSelect value={ratio} options={cfg.ratios} onChange={setRatio} label={t("media.ratio")} />
             {kind === "image" && (
               <div className="relative">
                 <button
@@ -320,14 +372,14 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
                   aria-expanded={settingsOpen}
                   className="flex h-9 items-center gap-1 rounded-full border border-neutral-200 pl-3 pr-2 text-xs text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
-                  Pengaturan
+                  {t("video.settings")}
                   <ChevronDown size={12} className={`transition ${settingsOpen ? "rotate-180" : ""}`} />
                 </button>
                 {settingsOpen && (
                   <>
                     <div className="fixed inset-0 z-[90]" onClick={() => setSettingsOpen(false)} aria-hidden="true" />
                     <div className="fixed bottom-24 left-4 z-[100] w-[calc(100vw-2rem)] max-w-64 rounded-xl border border-neutral-200 bg-white p-3 shadow-2xl sm:left-1/2 sm:-translate-x-1/2 dark:border-neutral-700 dark:bg-neutral-900">
-                      <p className="mb-1.5 text-xs font-medium text-neutral-900 dark:text-white">Gaya gambar</p>
+                      <p className="mb-1.5 text-xs font-medium text-neutral-900 dark:text-white">{t("media.style")}</p>
                       <div className="mb-3 flex flex-wrap gap-1.5">
                         {IMAGE_STYLES.map((s) => (
                           <button
@@ -340,13 +392,13 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
                                 : "border-neutral-200 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
                             }`}
                           >
-                            {s}
+                            {styleLabel(s)}
                           </button>
                         ))}
                       </div>
                       <div className="grid grid-cols-1 gap-2">
                         <label className="text-xs text-neutral-500">
-                          Jumlah
+                          {t("media.count")}
                           <select
                             value={count}
                             onChange={(e) => setCount(Number(e.target.value))}
@@ -368,7 +420,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
               className="flex h-9 items-center gap-1 rounded-full border border-neutral-200 pl-3 pr-2 text-xs text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
               <Dices size={12} />
-              Ide acak
+              {t("media.random")}
             </button>
           </div>
 
@@ -376,7 +428,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value.slice(0, MAX_LEN))}
-              placeholder={cfg.placeholder}
+              placeholder={t(cfg.placeholder)}
               rows={2}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -393,17 +445,17 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
               className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles size={15} />
-              Buat
+              {t("media.create")}
             </button>
           </div>
 
           <div className="mt-1 flex items-center justify-between px-1 text-xs text-neutral-500 dark:text-neutral-400">
             <span>
-              {credits} Token{kind === "image" && count > 1 ? ` (${count}×)` : ""}
-              {kind === "image" && style !== IMAGE_STYLES[0] ? ` · ${style}` : ""}
+              {t("media.tokens", { n: credits })}{kind === "image" && count > 1 ? ` (${count}×)` : ""}
+              {kind === "image" && style !== IMAGE_STYLES[0] ? ` · ${styleLabel(style)}` : ""}
             </span>
             <span>
-              {prompt.length} / {MAX_LEN.toLocaleString("id-ID")}
+              {prompt.length} / {MAX_LEN.toLocaleString(locale)}
             </span>
           </div>
         </div>
@@ -418,7 +470,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Detail hasil"
+            aria-label={t("media.detail")}
             onClick={(e) => e.stopPropagation()}
             className="flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-neutral-900 text-white shadow-2xl md:flex-row md:rounded-2xl"
           >
@@ -434,50 +486,50 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
-                    Selesai
+                    {t("media.done")}
                   </span>
                   <span className="rounded-full bg-neutral-800 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-neutral-300">
-                    {kind === "image" ? "Teks ke Gambar" : "Teks ke Video"}
+                    {kind === "image" ? t("media.textToImage") : t("media.textToVideo")}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelected(null)}
-                  aria-label="Tutup"
+                  aria-label={t("common.close")}
                   className="rounded-full p-1.5 text-neutral-400 transition hover:bg-neutral-800 hover:text-white"
                 >
                   <X size={16} />
                 </button>
               </div>
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Prompt</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("media.prompt")}</p>
                 <p className="mt-1 text-sm text-neutral-200">{selected.prompt}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Model</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("media.model")}</p>
                   <p className="mt-1 text-sm font-semibold">{selected.session.model}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Rasio</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("media.ratio")}</p>
                   <p className="mt-1 text-sm font-semibold">{selected.session.ratio}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Kredit</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("media.credits")}</p>
                   <p className="mt-1 flex items-center gap-1 text-sm font-semibold">
                     <Zap size={12} className="text-primary" />
                     {models.find((m) => m.id === selected.session.model)?.credits ?? "-"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">Dibuat</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">{t("media.created")}</p>
                   <p className="mt-1 flex items-center gap-1 text-sm font-semibold">
                     <Clock size={12} className="text-neutral-400" />
-                    {timeAgo(selected.session.created_at)}
+                    {timeAgo(t, selected.session.created_at)}
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-neutral-500">{expiryLabel(selected.session.created_at)}</p>
+              <p className="text-xs text-neutral-500">{expiryLabel(t, selected.session.created_at)}</p>
               <a
                 href={selected.url}
                 download
@@ -486,7 +538,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
                 className="flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-hover"
               >
                 <Download size={15} />
-                Unduh
+                {t("media.download")}
               </a>
               <button
                 type="button"
@@ -494,7 +546,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
                 className="flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800"
               >
                 <RotateCcw size={14} />
-                Buat Ulang
+                {t("media.recreate")}
               </button>
               <button
                 type="button"
@@ -502,7 +554,7 @@ export default function MediaStudio({ kind }: { kind: Kind }) {
                 className="flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm text-neutral-500 transition hover:bg-neutral-800 hover:text-red-400"
               >
                 <Trash2 size={14} />
-                Hapus
+                {t("media.delete")}
               </button>
             </div>
           </div>

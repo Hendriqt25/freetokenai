@@ -10,34 +10,20 @@ import {
   setKeyActive,
   type DevApiKey,
 } from "@/lib/api-keys";
+import { useT, type TKey } from "@/lib/i18n";
 
 // ponytail: saran dari hasil tes langsung di repo ini (bukan brosur):
 // llama-3.1/3.3 sudah dipensiunkan Groq (dikonfirmasi 404 dari API-nya),
 // yang terbukti 200: gpt-oss-20b/120b + gemini-3.5-flash.
-const FREE_MODELS = [
-  {
-    pakai: "Chat cepat / AI agent default",
-    id: "resto-chat-fast → openai/gpt-oss-20b",
-    kenapa: "Gratis di free-tier Groq, limit murah hati, terbukti 200 di repo ini. 1 Token / 1K token-LLM (PRD 6).",
-  },
-  {
-    pakai: "Chat reasoning / analisis kompleks",
-    id: "resto-chat-pro → openai/gpt-oss-120b",
-    kenapa: "Gratis juga di Groq, lebih pintar tapi lebih lambat. 10 Token / 1K token-LLM (PRD 6).",
-  },
-  {
-    pakai: "Fallback kalau Groq down",
-    id: "gemini-3.5-flash (langsung, bukan via gateway)",
-    kenapa: "Free-tier Google AI Studio; kadang 503 high-demand — route /api/chat otomatis fallback ke Groq.",
-  },
-  {
-    pakai: "Gambar termurah",
-    id: "nano-banana-2 / veo-3.1-lite (Vio, berbayar)",
-    kenapa: "Vio TIDAK punya tier gratis — tiap request motong kredit. Paling murah: gambar 3 kredit, video veo-3.1-lite 5 kredit. Alternatif benar-benar gratis: Pollinations.ai (gambar saja, kualitas lomba kurang).",
-  },
+const FREE_MODELS: { use: TKey; id: TKey; why: TKey }[] = [
+  { use: "dev.free1.use", id: "dev.free1.id", why: "dev.free1.why" },
+  { use: "dev.free2.use", id: "dev.free2.id", why: "dev.free2.why" },
+  { use: "dev.free3.use", id: "dev.free3.id", why: "dev.free3.why" },
+  { use: "dev.free4.use", id: "dev.free4.id", why: "dev.free4.why" },
 ];
 
 export default function DeveloperApi() {
+  const { t } = useT();
   const [keys, setKeys] = useState<DevApiKey[]>([]);
   const [name, setName] = useState("");
   const [justCreated, setJustCreated] = useState<string | null>(null);
@@ -86,20 +72,20 @@ export default function DeveloperApi() {
     <div className="h-full flex-1 overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6 md:px-8 md:py-8">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Developer API</h1>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">{t("dev.title")}</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Generate API Key (PRD 7.4) lalu pakai di AI agent via gateway OpenAI-compatible (PRD 7.3).
+            {t("dev.subtitle")}
           </p>
         </div>
 
         {/* Generate */}
         <section className="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">API Key untuk AI Agent</h2>
+          <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">{t("dev.keyTitle")}</h2>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Nama key, mis. Agen Warung — maks 100 char"
+              placeholder={t("dev.namePlaceholder")}
               maxLength={100}
               className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
             />
@@ -108,14 +94,14 @@ export default function DeveloperApi() {
               onClick={onGenerate}
               className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-hover"
             >
-              <Plus size={15} /> Generate
+              <Plus size={15} /> {t("dev.generate")}
             </button>
           </div>
 
           {justCreated && (
             <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm dark:bg-amber-950/40">
               <p className="font-medium text-amber-800 dark:text-amber-200">
-                Salin sekarang — key hanya ditampilkan 1x (NFR #2).
+                {t("dev.copyNow")}
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <code className="min-w-0 flex-1 break-all rounded-lg bg-white px-2 py-1 font-mono text-xs dark:bg-neutral-900">
@@ -124,7 +110,7 @@ export default function DeveloperApi() {
                 <button
                   type="button"
                   onClick={() => setReveal((v) => !v)}
-                  aria-label="Tampilkan key"
+                  aria-label={t("dev.reveal")}
                   className="rounded-lg border border-neutral-200 p-1.5 dark:border-neutral-700"
                 >
                   <Eye size={14} />
@@ -134,14 +120,14 @@ export default function DeveloperApi() {
                   onClick={() => copy(justCreated)}
                   className="flex items-center gap-1 rounded-lg border border-neutral-200 px-2 py-1.5 text-xs dark:border-neutral-700"
                 >
-                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Tersalin" : "Salin"}
+                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? t("dev.copied") : t("dev.copy")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setJustCreated(null)}
                   className="rounded-lg px-2 py-1.5 text-xs text-neutral-500 hover:underline"
                 >
-                  Tutup
+                  {t("dev.close")}
                 </button>
               </div>
             </div>
@@ -149,7 +135,7 @@ export default function DeveloperApi() {
 
           <ul className="mt-3 space-y-2">
             {keys.length === 0 && (
-              <p className="text-[13px] text-neutral-400">Belum ada key. Generate satu di atas.</p>
+              <p className="text-[13px] text-neutral-400">{t("dev.noKeys")}</p>
             )}
             {keys.map((k) => (
               <li
@@ -162,13 +148,13 @@ export default function DeveloperApi() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-neutral-900 dark:text-white">{k.name}</p>
                   <p className="font-mono text-xs text-neutral-500">
-                    {k.key_prefix}•••• {!k.is_active && "(dicabut)"}
+                    {k.key_prefix}•••• {!k.is_active && t("dev.revoked")}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setKeyActive(k.id, !k.is_active)}
-                  title={k.is_active ? "Cabut key" : "Aktifkan lagi"}
+                  title={k.is_active ? t("dev.revoke") : t("dev.reactivate")}
                   className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 >
                   <Power size={15} />
@@ -176,7 +162,7 @@ export default function DeveloperApi() {
                 <button
                   type="button"
                   onClick={() => deleteApiKey(k.id)}
-                  title="Hapus permanen"
+                  title={t("dev.delete")}
                   className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
                 >
                   <Trash2 size={15} />
@@ -188,11 +174,9 @@ export default function DeveloperApi() {
 
         {/* Cara pakai */}
         <section className="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">Pakai di AI Agent</h2>
+          <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">{t("dev.usageTitle")}</h2>
           <p className="mt-1 text-[13px] text-neutral-500">
-            Bentuk OpenAI-compatible — LangChain / Vercel AI SDK / curl langsung jalan. Base URL =
-            asal dashboard ini + <code className="font-mono">/api/v1/chat/completions</code>. Limit 60
-            req/menit/key (PRD 5.2).
+            {t("dev.usagePre")}<code className="font-mono">/api/v1/chat/completions</code>{t("dev.usagePost")}
           </p>
           <pre className="mt-3 overflow-x-auto rounded-xl bg-neutral-950 p-3 font-mono text-xs text-neutral-100">
             {curl}
@@ -202,14 +186,14 @@ export default function DeveloperApi() {
         {/* Model gratis */}
         <section className="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
-            Model gratis yang disarankan
+            {t("dev.modelsTitle")}
           </h2>
           <ul className="mt-3 space-y-3">
             {FREE_MODELS.map((m) => (
               <li key={m.id} className="text-[13px]">
-                <p className="font-medium text-neutral-900 dark:text-white">{m.pakai}</p>
-                <code className="font-mono text-xs text-primary">{m.id}</code>
-                <p className="mt-0.5 text-neutral-500">{m.kenapa}</p>
+                <p className="font-medium text-neutral-900 dark:text-white">{t(m.use)}</p>
+                <code className="font-mono text-xs text-primary">{t(m.id)}</code>
+                <p className="mt-0.5 text-neutral-500">{t(m.why)}</p>
               </li>
             ))}
           </ul>

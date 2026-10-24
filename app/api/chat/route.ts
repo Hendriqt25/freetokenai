@@ -19,23 +19,27 @@ const SYSTEM_ID =
   "Jawab dalam Bahasa Indonesia yang ringkas dan membantu. " +
   "Untuk jawaban yang bersifat faktual (bukan opini atau kreatif murni), akhiri dengan blok 'Referensi:' berisi 1-3 sumber relevan " +
   "(nama sumber — URL bila tahu, satu per baris). Tanpa jawaban faktual = tanpa blok referensi.";
+const SYSTEM_EN =
+  "Answer in concise, helpful English. " +
+  "For factual answers (not opinion or purely creative), end with a 'References:' block containing 1-3 relevant sources " +
+  "(source name — URL if known, one per line). No factual answer = no references block.";
 
 type HistItem = { role?: unknown; content?: unknown };
 
-async function callModel(route: AiRoute, message: string, history: HistItem[]) {
-  const out = await chatComplete(route, { system: SYSTEM_ID, message, history });
+async function callModel(route: AiRoute, message: string, history: HistItem[], system: string) {
+  const out = await chatComplete(route, { system, message, history });
   return out;
 }
 
-async function providerResponse(route: AiRoute, message: string, history: HistItem[]) {
-  const out = await callModel(route, message, history);
+async function providerResponse(route: AiRoute, message: string, history: HistItem[], system: string) {
+  const out = await callModel(route, message, history, system);
   if (out.ok) return NextResponse.json({ reply: out.reply });
 
   // platform Gemini sering 503 high-demand -> fallback Groq 20b bila key tersedia
   if (route.family === "gemini") {
     const alt = await resolveRoute("openai/gpt-oss-20b", "chat");
     if (alt) {
-      const retry = await callModel(alt, message, history);
+      const retry = await callModel(alt, message, history, system);
       if (retry.ok) return NextResponse.json({ reply: retry.reply });
     }
   }
@@ -102,7 +106,7 @@ async function persistAndRespond(
 }
 
 export async function POST(req: Request) {
-  let body: { message?: unknown; history?: HistItem[]; model?: unknown; session_id?: unknown };
+  let body: { message?: unknown; history?: HistItem[]; model?: unknown; session_id?: unknown; lang?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -131,6 +135,7 @@ export async function POST(req: Request) {
   if (gate) return gate;
 
   const model = String(body.model ?? GEMINI_DEFAULT).slice(0, 80);
+  const system = body.lang === "en" ? SYSTEM_EN : SYSTEM_ID;
 
   const route = await resolveRoute(model, "chat");
   if (!route) {
@@ -152,7 +157,7 @@ export async function POST(req: Request) {
   if (!wsId) {
     if (process.env.NODE_ENV === "production")
       return gatekeeperAccessResponse("chat", "Belum login.");
-    return providerResponse(route, message, history);
+    return providerResponse(route, message, history, system);
   }
 
   let usageId: string | undefined;
@@ -163,7 +168,7 @@ export async function POST(req: Request) {
     const inputChars =
       gateInput.length + (Array.isArray(body.history) ? body.history.reduce((n, h) => n + String(h?.content ?? "").length, 0) : 0);
     const cost = Math.max(1, Math.ceil((Math.ceil(inputChars / 4) / 1000) * per1k));
-    const res = await withTokens(wsId, cost, () => providerResponse(route, message, history), {
+    const res = await withTokens(wsId, cost, () => providerResponse(route, message, history, system), {
       modelId: model,
       endpointType: "chat",
       onUsageLogged: (id) => {

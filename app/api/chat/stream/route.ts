@@ -26,11 +26,19 @@ const SYSTEM_ID =
   "Jawab dalam Bahasa Indonesia yang ringkas dan membantu. " +
   "Untuk jawaban yang bersifat faktual (bukan opini atau kreatif murni), akhiri dengan blok 'Referensi:' berisi 1-3 sumber relevan " +
   "(nama sumber — URL bila tahu, satu per baris). Tanpa jawaban faktual = tanpa blok referensi.";
+const SYSTEM_EN =
+  "Answer in concise, helpful English. " +
+  "For factual answers (not opinion or purely creative), end with a 'References:' block containing 1-3 relevant sources " +
+  "(source name — URL if known, one per line). No factual answer = no references block.";
 
-const CONTINUE_PROMPT =
+const CONTINUE_PROMPT_ID =
   "Lanjutkan jawaban sebelumnya TEPAT dari bagian terakhir. " +
   "Jangan mengulang kalimat yang sudah ada, jangan memberi pembuka baru. " +
   "Mulai langsung dengan kelanjutannya.";
+const CONTINUE_PROMPT_EN =
+  "Continue the previous answer EXACTLY from where it stopped. " +
+  "Do not repeat existing sentences and do not add a new opening. " +
+  "Start directly with the continuation.";
 
 type HistItem = { role?: unknown; content?: unknown };
 
@@ -41,6 +49,7 @@ type Body = {
   session_id?: unknown;
   attachment_ids?: unknown;
   continue?: unknown;
+  lang?: unknown;
 };
 
 function normalizeFinish(reason: string): FinishReason {
@@ -73,6 +82,8 @@ export async function POST(req: Request) {
   }
 
   const isContinue = body.continue === true;
+  const lang: "id" | "en" = body.lang === "en" ? "en" : "id";
+  const L = (id: string, en: string) => (lang === "en" ? en : id);
   const message = String(body.message ?? "").trim().slice(0, 16_000);
   if (!isContinue && !message)
     return NextResponse.json(
@@ -147,11 +158,11 @@ export async function POST(req: Request) {
   if (!route) {
     if (await isModelAllowed("chat", model))
       return NextResponse.json(
-        { error: { code: "NO_API_KEY", message: "API key provider belum diisi admin. Hubungi super_admin." } },
+        { error: { code: "NO_API_KEY", message: L("API key provider belum diisi admin. Hubungi super_admin.", "The provider API key has not been set by the admin. Contact super_admin.") } },
         { status: 500 },
       );
     return NextResponse.json(
-      { error: { code: "INVALID_MODEL", message: "Model tidak dikenal / tidak aktif di katalog." } },
+      { error: { code: "INVALID_MODEL", message: L("Model tidak dikenal / tidak aktif di katalog.", "Unknown model / not active in the catalog.") } },
       { status: 400 },
     );
   }
@@ -161,7 +172,7 @@ export async function POST(req: Request) {
     return gatekeeperAccessResponse("chat", "Belum login.");
   if (isContinue && (!wsId || !sessionId))
     return NextResponse.json(
-      { error: { code: "INVALID_SESSION", message: "Sesi tidak valid untuk melanjutkan." } },
+      { error: { code: "INVALID_SESSION", message: L("Sesi tidak valid untuk melanjutkan.", "Invalid session for continuing.") } },
       { status: 400 },
     );
 
@@ -174,14 +185,14 @@ export async function POST(req: Request) {
     lastAssistant = await loadLastAssistant(wsId, sessionId);
     if (!lastAssistant)
       return NextResponse.json(
-        { error: { code: "NO_MESSAGE", message: "Tidak ada jawaban yang bisa dilanjutkan." } },
+        { error: { code: "NO_MESSAGE", message: L("Tidak ada jawaban yang bisa dilanjutkan.", "There is no answer to continue.") } },
         { status: 400 },
       );
     historyForApi = [
       ...(await loadHistoryBefore(sessionId, lastAssistant.id)),
       { role: "assistant", content: lastAssistant.content },
     ];
-    providerMessage = CONTINUE_PROMPT;
+    providerMessage = lang === "en" ? CONTINUE_PROMPT_EN : CONTINUE_PROMPT_ID;
     appendToMessageId = lastAssistant.id;
   }
 
@@ -191,7 +202,7 @@ export async function POST(req: Request) {
       {
         error: {
           code: "VISION_UNSUPPORTED",
-          message: "Model ini belum mendukung gambar. Pilih model Gemini atau model vision lain.",
+          message: L("Model ini belum mendukung gambar. Pilih model Gemini atau model vision lain.", "This model does not support images yet. Choose Gemini or another vision model."),
         },
       },
       { status: 400 },
@@ -205,7 +216,7 @@ export async function POST(req: Request) {
         {
           error: {
             code: "VISION_UNSUPPORTED",
-            message: "Sesi ini berisi gambar. Pilih model Gemini atau model vision lain.",
+            message: L("Sesi ini berisi gambar. Pilih model Gemini atau model vision lain.", "This session contains images. Choose Gemini or another vision model."),
           },
         },
         { status: 400 },
@@ -233,7 +244,7 @@ export async function POST(req: Request) {
       {
         error: {
           code: "VISION_UNSUPPORTED",
-          message: "Model ini belum mendukung gambar. Pilih model Gemini atau model vision lain.",
+          message: L("Model ini belum mendukung gambar. Pilih model Gemini atau model vision lain.", "This model does not support images yet. Choose Gemini or another vision model."),
         },
       },
       { status: 400 },
@@ -244,7 +255,7 @@ export async function POST(req: Request) {
     isContinue ? (lastAssistant?.content ?? "") : message,
     route.family,
   );
-  const system = SYSTEM_ID + documentPrompt;
+  const system = (lang === "en" ? SYSTEM_EN : SYSTEM_ID) + documentPrompt;
   // ponytail: prompt (system + dokumen + history + pesan) ikut ditagih per 1k token,
   // jadi kirim panjang ~2x lebih mahal — sesuai perilaku provider.
   const inputChars =
@@ -338,10 +349,14 @@ export async function POST(req: Request) {
         });
       } catch (e) {
         if (e instanceof InsufficientTokensError) {
+          const insufficientMsg = L(
+            `Saldo Token tidak cukup (sisa ${e.balance}). Klaim QR / top up dulu.`,
+            `Not enough Tokens (balance ${e.balance}). Claim a QR / top up first.`,
+          );
           enqueue({
             error: {
               code: "INSUFFICIENT_TOKENS",
-              message: `Saldo Token tidak cukup (sisa ${e.balance}). Klaim QR / top up dulu.`,
+              message: insufficientMsg,
             },
             gatekeeper: {
               decision: "BLOCK",
@@ -349,7 +364,7 @@ export async function POST(req: Request) {
               category: "credit",
               risk_level: "low",
               reason: "Saldo workspace tidak mencukupi biaya permintaan.",
-              user_message: `Saldo Token tidak cukup (sisa ${e.balance}). Klaim QR / top up dulu.`,
+              user_message: insufficientMsg,
             },
           });
           return;
@@ -363,7 +378,7 @@ export async function POST(req: Request) {
           await finishAssistantTurn({
             workspaceId: wsId,
             sessionId: sessionIdFinal || sessionId,
-            reply: `Maaf, ${messageText}`,
+            reply: L(`Maaf, ${messageText}`, `Sorry, ${messageText}`),
             finishReason: "error",
           }).catch(() => undefined);
         }

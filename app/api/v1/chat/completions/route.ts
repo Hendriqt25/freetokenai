@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { chatCost, InsufficientTokensError, insufficient, validateApiKey, withTokens } from "@/lib/billing";
+import { chatCost, InsufficientKeyQuotaError, InsufficientTokensError, insufficient, validateApiKey, withKeyTokens, withTokens } from "@/lib/billing";
 import { modelCost, providerKey } from "@/lib/model-registry";
 import { fetchRetryOnce } from "@/lib/obs";
 import { rateLimited } from "@/lib/rate-limit";
@@ -87,44 +87,49 @@ export async function POST(req: Request) {
     content: String(x.content ?? "").slice(0, 8000),
   }));
   const cost = (await modelCost("chat", groqModel)) ?? chatCost(modelId);
+  const callProvider = async () => {
+    // ponytail: NFR#6 — retry 1x transient; gagal akhir -> refund di billing.
+    const res = await fetchRetryOnce("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: groqModel,
+        messages: [
+          { role: "system", content: "Jawab dalam Bahasa Indonesia yang ringkas dan membantu." },
+          ...history,
+          { role: "user", content: message },
+        ],
+      }),
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok)
+      return NextResponse.json(
+        { error: { code: "PROVIDER_ERROR", message: data?.error?.message ?? "Groq error" } },
+        { status: 502 },
+      );
+    const reply = String(data?.choices?.[0]?.message?.content ?? "").trim();
+    // ponytail: bentuk OpenAI — agent tak perlu adaptor khusus.
+    return NextResponse.json({
+      id: `chatcmpl-dev-${Date.now()}`,
+      object: "chat.completion",
+      model: modelId,
+      choices: [{ index: 0, message: { role: "assistant", content: reply }, finish_reason: "stop" }],
+    });
+  };
+  const meta = { apiKeyId: valid.id, modelId, endpointType: "chat" as const };
   try {
-    return await withTokens(
-      valid.workspace_id,
-      cost,
-      async () => {
-        // ponytail: NFR#6 — retry 1x transient; gagal akhir -> refund di withTokens.
-        const res = await fetchRetryOnce("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-          body: JSON.stringify({
-            model: groqModel,
-            messages: [
-              { role: "system", content: "Jawab dalam Bahasa Indonesia yang ringkas dan membantu." },
-              ...history,
-              { role: "user", content: message },
-            ],
-          }),
-          cache: "no-store",
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok)
-          return NextResponse.json(
-            { error: { code: "PROVIDER_ERROR", message: data?.error?.message ?? "Groq error" } },
-            { status: 502 },
-          );
-        const reply = String(data?.choices?.[0]?.message?.content ?? "").trim();
-        // ponytail: bentuk OpenAI — agent tak perlu adaptor khusus.
-        return NextResponse.json({
-          id: `chatcmpl-dev-${Date.now()}`,
-          object: "chat.completion",
-          model: modelId,
-          choices: [{ index: 0, message: { role: "assistant", content: reply }, finish_reason: "stop" }],
-        });
-      },
-      { apiKeyId: valid.id, modelId, endpointType: "chat" },
+    // Key lama terikat workspace -> potong saldo workspace.
+    if (valid.workspace_id) return await withTokens(valid.workspace_id, cost, callProvider, meta);
+    // Key terbitan kasir (tanpa workspace) -> potong kuota key (sudah reserve dari cafe).
+    if (valid.cafe_id) return await withKeyTokens(valid.id, valid.cafe_id, cost, callProvider, meta);
+    return gatekeeperAccessResponse(
+      "developer_api",
+      "API key tidak terhubung ke workspace/cafe. Terbitkan key baru dari kasir.",
     );
   } catch (e) {
     if (e instanceof InsufficientTokensError) return insufficient(e.balance, "developer_api");
+    if (e instanceof InsufficientKeyQuotaError) return insufficient(e.remaining, "developer_api");
     throw e;
   }
 }

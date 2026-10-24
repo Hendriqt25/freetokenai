@@ -126,7 +126,8 @@ export async function GET(req: Request) {
       },
       { headers: corsHeaders(origin) },
     );
-  } catch {
+  } catch (err) {
+    console.error("[kasir/dashboard]", err);
     return NextResponse.json(
       { error: { code: "SERVER_ERROR", message: "Gagal memuat dashboard kasir." } },
       { status: 500, headers: corsHeaders(origin) },

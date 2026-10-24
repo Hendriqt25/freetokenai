@@ -15,6 +15,7 @@ import {
   type ChatMessage,
 } from "@/lib/chat-history";
 import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
+import { useT, type TKey } from "@/lib/i18n";
 import {
   fetchWorkspace,
   getAppSettings,
@@ -22,7 +23,6 @@ import {
   SETTINGS_CHANGED,
   WORKSPACE_CHANGED,
 } from "@/lib/settings";
-import { suggestionCards } from "@/lib/mock-data";
 import ChatInput from "./ChatInput";
 import SuggestionCard from "./SuggestionCard";
 
@@ -60,6 +60,12 @@ function canContinue(message: Message): boolean {
   );
 }
 
+const SUGGESTIONS: { icon: "file" | "pen" | "help"; title: TKey; desc: TKey }[] = [
+  { icon: "file", title: "suggest.summarize.title", desc: "suggest.summarize.desc" },
+  { icon: "pen", title: "suggest.write.title", desc: "suggest.write.desc" },
+  { icon: "help", title: "suggest.ask.title", desc: "suggest.ask.desc" },
+];
+
 // ponytail: markdown-lite tanpa dep baru — cukup bold/italic/code + link, yang lain tampil polos.
 function renderInline(text: string, keyPrefix: string) {
   return text.split(/(https?:\/\/[^\s)]+|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, i) => {
@@ -93,9 +99,9 @@ function renderInline(text: string, keyPrefix: string) {
   });
 }
 
-// ponytail: potong ekor "Referensi:" dari jawaban AI jadi blok sumber tersendiri.
+// ponytail: potong ekor "Referensi:"/"References:" dari jawaban AI jadi blok sumber tersendiri.
 function splitReferences(text: string): { body: string; refs: string[] } {
-  const m = text.match(/\n\s*(?:\*\*)?Referensi(?:-sumber)?(?:\*\*)?\s*:?\s*\n?([\s\S]*)$/i);
+  const m = text.match(/\n\s*(?:\*\*)?(?:Referensi(?:-sumber)?|References?)(?:\*\*)?\s*:?\s*\n?([\s\S]*)$/i);
   if (!m) return { body: text, refs: [] };
   const refs = m[1]
     .split("\n")
@@ -113,6 +119,7 @@ const AssistantBubble = memo(function AssistantBubble({
   text: string;
   isError?: boolean;
 }) {
+  const { t } = useT();
   const { body, refs } = splitReferences(text);
   return (
     <div
@@ -126,7 +133,7 @@ const AssistantBubble = memo(function AssistantBubble({
       {refs.length > 0 && (
         <div className="mt-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900">
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-            Referensi
+            {t("chat.references")}
           </p>
           <ul className="flex flex-col gap-1">
             {refs.map((r, i) => (
@@ -190,6 +197,7 @@ type StreamCallbacks = {
 };
 
 function useStreamingChat() {
+  const { lang } = useT();
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -302,7 +310,7 @@ function useStreamingChat() {
         } else if (abortRef.current?.signal.aborted) {
           callbacks.onStop(accumulatedRef.current);
         } else {
-          callbacks.onError(e instanceof Error ? e.message : "Streaming gagal");
+          callbacks.onError(e instanceof Error ? e.message : lang === "en" ? "streaming failed" : "Streaming gagal");
         }
         return false;
       } finally {
@@ -310,7 +318,7 @@ function useStreamingChat() {
         notifyWorkspaceChanged();
       }
     },
-    [flushNow, pushChunk],
+    [flushNow, pushChunk, lang],
   );
 
   const start = useCallback(
@@ -321,6 +329,7 @@ function useStreamingChat() {
         history: { role: string; content: string }[];
         model: string;
         attachmentIds: string[];
+        lang: string;
       },
       callbacks: StreamCallbacks,
     ) =>
@@ -332,6 +341,7 @@ function useStreamingChat() {
           model: args.model,
           session_id: args.sessionId,
           attachment_ids: args.attachmentIds,
+          lang: args.lang,
         },
         callbacks,
       ),
@@ -339,8 +349,8 @@ function useStreamingChat() {
   );
 
   const continueFrom = useCallback(
-    (sessionId: string, model: string, callbacks: StreamCallbacks) =>
-      run("/api/chat/stream", { continue: true, session_id: sessionId, model }, callbacks),
+    (sessionId: string, model: string, lang: string, callbacks: StreamCallbacks) =>
+      run("/api/chat/stream", { continue: true, session_id: sessionId, model, lang }, callbacks),
     [run],
   );
 
@@ -359,6 +369,7 @@ function useStreamingChat() {
 }
 
 export default function ChatPanel({ sessionId }: { sessionId?: string }) {
+  const { t, lang, locale } = useT();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSending, setIsSending] = useState(false);
   // ponytail: nilai awal SSR-safe dulu; simpanan localStorage dibaca setelah mount
@@ -374,7 +385,12 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
     let alive = true;
     const refresh = () => {
       void fetchWorkspace().then((w) => {
-        if (alive) setExpiresLabel(w.expiresAtLabel);
+        if (!alive) return;
+        setExpiresLabel(
+          w.expiresAt
+            ? new Date(w.expiresAt).toLocaleDateString(locale, { day: "numeric", month: "long" })
+            : "",
+        );
       });
     };
     refresh();
@@ -385,7 +401,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
       window.removeEventListener(WORKSPACE_CHANGED, refresh);
       window.removeEventListener(SETTINGS_CHANGED, refresh);
     };
-  }, []);
+  }, [locale]);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [newBelow, setNewBelow] = useState(false);
@@ -506,6 +522,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
         history: historyForApi,
         model,
         attachmentIds: attachments.map((a) => a.id),
+        lang,
       },
       {
         onDone: (finalSessionId, reply, finishReason) => {
@@ -523,7 +540,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
         },
         onError: (err) => {
           setIsSending(false);
-          const errMsg = `Maaf, ${err}`;
+          const errMsg = `${t("chat.sorry")} ${err}`;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgIdRef.current
@@ -538,7 +555,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgIdRef.current
-                ? { ...m, text: partial || "Dihentikan.", finishReason: "aborted" }
+                ? { ...m, text: partial || t("chat.stopped"), finishReason: "aborted" }
                 : m,
             ),
           );
@@ -561,7 +578,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
     setAtBottom(true);
     setNewBelow(false);
 
-    await continueFrom(sessionId, model, {
+    await continueFrom(sessionId, model, lang, {
       onDone: (_sessionId, reply, finishReason) => {
         setIsSending(false);
         setContinuingId(null);
@@ -583,7 +600,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            text: `Maaf, ${err}`,
+            text: `${t("chat.sorry")} ${err}`,
             isError: true,
             finishReason: "error",
           },
@@ -595,7 +612,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === last.id
-              ? { ...m, text: m.text + (partial || "Dihentikan."), finishReason: "aborted" }
+              ? { ...m, text: m.text + (partial || t("chat.stopped")), finishReason: "aborted" }
               : m,
           ),
         );
@@ -610,19 +627,24 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
           {expiresLabel && (
             <span className="flex items-center gap-2 rounded-full border border-neutral-200 px-4 py-1.5 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
               <Wand2 size={14} className="text-primary" />
-              Aktif Sampai {expiresLabel}
+              {t("chat.activeUntil", { date: expiresLabel })}
             </span>
           )}
 
           <h1 className="text-center text-2xl font-medium text-neutral-900 md:text-4xl dark:text-white">
-            Mau mulai dari mana hari ini?
+            {t("chat.headline")}
           </h1>
         </div>
 
         <div className="flex flex-col gap-3 lg:gap-4">
           <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
-            {suggestionCards.map((card) => (
-              <SuggestionCard key={card.title} {...card} />
+            {SUGGESTIONS.map((card) => (
+              <SuggestionCard
+                key={card.title}
+                icon={card.icon}
+                title={t(card.title)}
+                description={t(card.desc)}
+              />
             ))}
           </div>
 
@@ -655,7 +677,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
                   disabled={loadingOlder}
                   className="rounded-full border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
-                  {loadingOlder ? "Memuat…" : "Muat pesan sebelumnya"}
+                  {loadingOlder ? t("chat.loading") : t("chat.loadOlder")}
                 </button>
               </div>
             )}
@@ -674,7 +696,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
                 <div key={message.id}>
                   <AssistantBubble text={displayText} isError={message.isError} />
                   {message.finishReason === "aborted" && !isSending && (
-                    <p className="mt-1.5 text-[11px] text-neutral-400">Dihentikan</p>
+                    <p className="mt-1.5 text-[11px] text-neutral-400">{t("chat.stoppedShort")}</p>
                   )}
                   {isLast && !isSending && canContinue(message) && (
                     <button
@@ -683,7 +705,7 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
                       className="mt-2 flex items-center gap-1.5 rounded-full border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
                     >
                       <Play size={12} />
-                      Lanjutkan
+                      {t("chat.continue")}
                     </button>
                   )}
                 </div>
@@ -699,11 +721,11 @@ export default function ChatPanel({ sessionId }: { sessionId?: string }) {
           <button
             type="button"
             onClick={scrollToBottom}
-            aria-label="Scroll ke bawah"
+            aria-label={t("chat.scrollBottom")}
             className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 shadow-md transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
           >
             <ArrowDown size={14} />
-            {newBelow ? "Pesan baru" : "Ke bawah"}
+            {newBelow ? t("chat.newMessages") : t("chat.toBottom")}
           </button>
         )}
       </div>

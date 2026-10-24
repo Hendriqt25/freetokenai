@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { CHAT_MODELS, DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
 import type { ChatAttachment } from "@/lib/chat-history";
 import { fetchCatalogModels, type CatalogModel } from "@/lib/model-catalog";
+import { useT, type TKey } from "@/lib/i18n";
 import ModelPicker from "./ModelPicker";
 
 type DraftAttachment = {
@@ -56,14 +57,14 @@ function sizeLabel(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-const ATTACH_OPTIONS = [
+const ATTACH_OPTIONS: { key: string; label: TKey; description: TKey; icon: typeof Paperclip }[] = [
   {
     key: "file",
-    label: "Upload File",
-    description: "Dokumen, PDF, atau file lainnya",
+    label: "input.uploadFile",
+    description: "input.uploadDesc",
     icon: Paperclip,
   },
-] as const;
+];
 
 export default function ChatInput({
   onSend,
@@ -83,6 +84,7 @@ export default function ChatInput({
   /** Satu baris sejajar tombol, dipakai setelah percakapan mulai — mirip AI chat pada umumnya. */
   compact?: boolean;
 }) {
+  const { t } = useT();
   const [value, setValue] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
@@ -146,9 +148,9 @@ export default function ChatInput({
     try {
       const res = await fetch("/api/v1/chat/attachments", { method: "POST", body: form });
       const data = (await res.json().catch(() => ({}))) as UploadResponse;
-      if (!res.ok) throw new Error(data.error?.message ?? `Upload gagal (HTTP ${res.status})`);
+      if (!res.ok) throw new Error(data.error?.message ?? t("input.uploadFailed", { status: res.status }));
       const uploaded = data.attachments?.[0];
-      if (!uploaded) throw new Error("Server tidak mengembalikan data lampiran.");
+      if (!uploaded) throw new Error(t("input.noAttachment"));
       patchAttachment(draft.key, {
         id: uploaded.id,
         filename: uploaded.filename,
@@ -159,7 +161,7 @@ export default function ChatInput({
     } catch (e) {
       patchAttachment(draft.key, {
         status: "error",
-        error: e instanceof Error ? e.message : "Upload gagal.",
+        error: e instanceof Error ? e.message : t("input.uploadFailedShort"),
       });
     }
   }
@@ -169,7 +171,7 @@ export default function ChatInput({
     const incoming = Array.from(fileList);
     const room = MAX_FILES - attachments.length;
     if (room <= 0) {
-      setAttachError(`Maksimal ${MAX_FILES} file per pesan.`);
+      setAttachError(t("input.maxFiles", { n: MAX_FILES }));
       return;
     }
 
@@ -178,7 +180,7 @@ export default function ChatInput({
       const image = isImageName(file.name) || file.type.startsWith("image/");
       const limit = image ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
       if (file.size > limit) {
-        setAttachError(`"${file.name}" melebihi batas ${sizeLabel(limit)}.`);
+        setAttachError(t("input.tooLarge", { name: file.name, size: sizeLabel(limit) }));
         continue;
       }
       accepted.push({
@@ -194,7 +196,7 @@ export default function ChatInput({
       });
     }
 
-    if (incoming.length > room) setAttachError(`Hanya ${room} file lagi yang bisa ditambahkan.`);
+    if (incoming.length > room) setAttachError(t("input.roomLeft", { n: room }));
     if (!accepted.length) return;
 
     setAttachments((prev) => [...prev, ...accepted.map((a) => a.draft)]);
@@ -264,10 +266,10 @@ export default function ChatInput({
               </span>
               <span>
                 <span className="block text-sm font-medium text-neutral-900 dark:text-white">
-                  {label}
+                  {t(label)}
                 </span>
                 <span className="block text-xs text-neutral-500 dark:text-neutral-400">
-                  {description}
+                  {t(description)}
                 </span>
               </span>
             </button>
@@ -280,7 +282,7 @@ export default function ChatInput({
         onClick={() => setMenuOpen((open) => !open)}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
-        aria-label={menuOpen ? "Tutup menu lampiran" : "Tambah lampiran"}
+        aria-label={menuOpen ? t("input.closeMenu") : t("input.addAttachment")}
         className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
           menuOpen
             ? "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
@@ -301,7 +303,7 @@ export default function ChatInput({
     <button
       type="button"
       onClick={() => fileInputRef.current?.click()}
-      aria-label="Upload file"
+      aria-label={t("input.uploadAria")}
       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 sm:hidden"
     >
       <Plus size={18} />
@@ -336,7 +338,7 @@ export default function ChatInput({
               <button
                 type="button"
                 onClick={() => removeAttachment(a.key)}
-                aria-label={`Hapus ${a.filename}`}
+                aria-label={t("input.removeFile", { name: a.filename })}
                 className="shrink-0 rounded-full p-0.5 hover:bg-neutral-200 dark:hover:bg-neutral-700"
               >
                 <X size={11} />
@@ -354,7 +356,7 @@ export default function ChatInput({
     <button
       type="button"
       onClick={onStop}
-      aria-label="Hentikan jawaban"
+      aria-label={t("input.stop")}
       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white transition hover:bg-primary-hover"
     >
       <Square size={14} fill="currentColor" />
@@ -368,7 +370,7 @@ export default function ChatInput({
         submitting ||
         attachments.some((a) => a.status === "uploading")
       }
-      aria-label="Kirim pesan"
+      aria-label={t("input.send")}
       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
     >
       <Send size={15} />
@@ -381,7 +383,7 @@ export default function ChatInput({
       value={model}
       onChange={(id) => onModelChange?.(id)}
       disabled={isSending}
-      priceNote="per 1.000 token (prompt + jawaban)"
+      priceNote={t("input.priceNote")}
     />
   );
 
@@ -414,7 +416,7 @@ export default function ChatInput({
             onKeyDown={handleKeyDown}
             rows={1}
             autoFocus={autoFocus}
-            placeholder="Ketik apa saja — pertanyaan, tugas, atau ide mentah..."
+            placeholder={t("input.placeholder")}
             className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-6 text-neutral-900 placeholder:text-neutral-400 focus:outline-none dark:text-white"
             style={{ height: 36 }}
           />
@@ -423,9 +425,9 @@ export default function ChatInput({
           {sendButton}
         </div>
         <p className="mt-2 text-center text-xs text-neutral-400">
-          RestoAI bisa keliru. Periksa info penting.{" "}
+          {t("input.disclaimer")}{" "}
           <a href="/terms" className="font-medium text-neutral-600 underline dark:text-neutral-300">
-            Ketentuan Token
+            {t("input.terms")}
           </a>
         </p>
         {hiddenFileInputs}
@@ -443,7 +445,7 @@ export default function ChatInput({
           onKeyDown={handleKeyDown}
           rows={2}
           autoFocus={autoFocus}
-          placeholder="Ketik apa saja — pertanyaan, tugas, atau ide mentah..."
+          placeholder={t("input.placeholder")}
           className="w-full resize-none bg-transparent text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none dark:text-white"
         />
         <div className="flex items-center justify-between">
@@ -456,9 +458,9 @@ export default function ChatInput({
         </div>
       </div>
       <p className="mt-3 text-center text-xs text-neutral-400">
-        RestoAI bisa keliru. Periksa info penting.{" "}
+        {t("input.disclaimer")}{" "}
         <a href="/terms" className="font-medium text-neutral-600 underline dark:text-neutral-300">
-          Ketentuan Token
+          {t("input.terms")}
         </a>
       </p>
 

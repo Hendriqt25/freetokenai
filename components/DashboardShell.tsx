@@ -6,6 +6,7 @@ import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import Link from "next/link";
 import { notifySettingsChanged, notifyWorkspaceChanged } from "@/lib/settings";
+import { useT } from "@/lib/i18n";
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -78,6 +79,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 }
 
 function ApiKeyPromptModal({ onSuccess }: { onSuccess: () => void }) {
+  const { t } = useT();
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -86,7 +88,7 @@ function ApiKeyPromptModal({ onSuccess }: { onSuccess: () => void }) {
     if (e) e.preventDefault();
     const key = apiKey.trim();
     if (!key) {
-      setError("Masukkan API key terlebih dahulu.");
+      setError(t("auth.empty"));
       return;
     }
 
@@ -103,12 +105,12 @@ function ApiKeyPromptModal({ onSuccess }: { onSuccess: () => void }) {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error?.message || "Validasi API key gagal.");
+        throw new Error(data?.error?.message || t("auth.failed"));
       }
 
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan.");
+      setError(err instanceof Error ? err.message : t("auth.error"));
     } finally {
       setLoading(false);
     }
@@ -116,16 +118,16 @@ function ApiKeyPromptModal({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
-      <div className="w-full max-w-md rounded-3xl bg-white p-6 md:p-8 shadow-2xl dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-md rounded-3xl bg-white p-6 md:p-8 shadow-2xl dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 modal-enter">
         <div className="mb-6 text-center">
           <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-inner">
             <Sparkles size={32} />
           </div>
           <h2 className="text-2xl font-bold text-neutral-900 dark:text-neutral-50 tracking-tight">
-            Selamat Datang di FreeTokenAI
+            {t("auth.welcome")}
           </h2>
           <p className="mt-2 text-xs md:text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">
-            Silakan masukkan <strong>API Key</strong> dari kasir cafe (tercantum pada struk belanja Anda) untuk mengakses AI Chat, Gambar, dan Video.
+            {t("auth.desc")}
           </p>
         </div>
 
@@ -133,7 +135,7 @@ function ApiKeyPromptModal({ onSuccess }: { onSuccess: () => void }) {
           <div>
             <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5 flex items-center gap-1.5">
               <KeyRound size={14} className="text-primary" />
-              API Key Anda
+              {t("auth.yourKey")}
             </label>
             <input
               type="password"
@@ -159,19 +161,19 @@ function ApiKeyPromptModal({ onSuccess }: { onSuccess: () => void }) {
             {loading ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                <span>Memvalidasi Kunci...</span>
+                <span>{t("auth.validating")}</span>
               </>
             ) : (
-              "Validasi & Masuk ke Dashboard"
+              t("auth.validate")
             )}
           </button>
 
           <div className="pt-2 text-center text-[11px] text-neutral-400">
-            Belum punya kunci? Pesan kopi / makanan di kasir dan minta struk API Key AI.
+            {t("auth.needKey")}
             <div className="mt-2">
-              Pegawai cafe?{" "}
+              {t("auth.staff")}{" "}
               <Link href="/kasir" className="font-semibold text-primary hover:underline">
-                Login Kasir POS
+                {t("auth.staffLogin")}
               </Link>
             </div>
           </div>

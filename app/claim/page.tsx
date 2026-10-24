@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, ReceiptText, Sparkles } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
-type ClaimResult = { token_balance: number; expires_at: string };
-
-const fmtNum = (n: number) => new Intl.NumberFormat("id-ID").format(n);
-const fmtDate = (s: string) =>
-  new Intl.DateTimeFormat("id-ID", { dateStyle: "long", timeStyle: "short" }).format(new Date(s));
-
-export default function ClaimPage() {
+type ClaimResult = { token_balance: number; expires_at: string };export default function ClaimPage() {
+  const { t, locale } = useT();
+  const fmtNum = (n: number) => new Intl.NumberFormat(locale).format(n);
+  const fmtDate = (s: string) =>
+    new Intl.DateTimeFormat(locale, { dateStyle: "long", timeStyle: "short" }).format(new Date(s));
   const [code, setCode] = useState("");
   const [identifier, setIdentifier] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,12 +33,12 @@ export default function ClaimPage() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(data?.error?.message ?? `Klaim gagal (HTTP ${res.status}).`);
+        setError(data?.error?.message ?? t("claim.httpFailed", { status: res.status }));
         return;
       }
       setResult(data.workspace as ClaimResult);
     } catch {
-      setError("Tidak dapat menghubungi server. Periksa koneksi lalu coba lagi.");
+      setError(t("claim.network"));
     } finally {
       setBusy(false);
     }
@@ -61,22 +60,22 @@ export default function ClaimPage() {
           {result ? (
             <div className="text-center">
               <CheckCircle2 className="mx-auto text-emerald-500" size={44} />
-              <h1 className="mt-3 text-xl font-bold text-neutral-900 dark:text-white">Token berhasil diklaim</h1>
+              <h1 className="mt-3 text-xl font-bold text-neutral-900 dark:text-white">{t("claim.successTitle")}</h1>
               <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                Saldo token masuk ke akun Anda dan berlaku sampai {fmtDate(result.expires_at)}.
+                {t("claim.successDesc", { date: fmtDate(result.expires_at) })}
               </p>
               <div className="mt-5 rounded-xl bg-primary-soft px-4 py-5 dark:bg-primary/10">
-                <p className="text-xs font-medium uppercase tracking-wide text-primary">Saldo token</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary">{t("claim.balance")}</p>
                 <p className="font-sf text-3xl font-bold text-primary">+{fmtNum(result.token_balance)}</p>
               </div>
               <a
                 href="/"
                 className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-hover"
               >
-                Buka dashboard
+                {t("claim.openDashboard")}
               </a>
               <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
-                Anda sudah otomatis masuk di perangkat ini.
+                {t("claim.autoLogin")}
               </p>
             </div>
           ) : (
@@ -84,9 +83,9 @@ export default function ClaimPage() {
               <div className="mb-5 flex items-center gap-2">
                 <ReceiptText className="text-primary" size={22} />
                 <div>
-                  <h1 className="text-xl font-bold text-neutral-900 dark:text-white">Klaim Token Struk</h1>
+                  <h1 className="text-xl font-bold text-neutral-900 dark:text-white">{t("claim.title")}</h1>
                   <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                    Masukkan kode struk dan nomor WhatsApp/email Anda.
+                    {t("claim.subtitle")}
                   </p>
                 </div>
               </div>
@@ -94,7 +93,7 @@ export default function ClaimPage() {
               <form onSubmit={submit} className="space-y-4">
                 <div>
                   <label htmlFor="code" className="mb-1 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Kode struk
+                    {t("claim.code")}
                   </label>
                   <input
                     id="code"
@@ -114,13 +113,13 @@ export default function ClaimPage() {
                     htmlFor="identifier"
                     className="mb-1 block text-sm font-medium text-neutral-700 dark:text-neutral-300"
                   >
-                    No. WhatsApp atau email
+                    {t("claim.identifier")}
                   </label>
                   <input
                     id="identifier"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="0812xxxxxxx atau nama@email.com"
+                    placeholder={t("claim.identifierPlaceholder")}
                     autoComplete="email"
                     required
                     className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-primary dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
@@ -139,12 +138,12 @@ export default function ClaimPage() {
                   className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {busy && <Loader2 className="animate-spin" size={16} />}
-                  {busy ? "Memproses…" : "Klaim token"}
+                  {busy ? t("claim.processing") : t("claim.submit")}
                 </button>
               </form>
 
               <p className="mt-4 text-center text-xs text-neutral-500 dark:text-neutral-400">
-                Satu kode struk hanya bisa diklaim satu kali. Token berlaku 7 hari sejak klaim.
+                {t("claim.note")}
               </p>
             </>
           )}
