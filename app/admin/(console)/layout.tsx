@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getAdminServerSession } from '@/lib/auth';
 import Link from 'next/link';
-import { LayoutDashboard, Building2, ChevronLeft, KeyRound, Users } from 'lucide-react';
+import { LayoutDashboard, Building2, ChevronLeft, KeyRound, Users, ShieldCheck, Package, ScrollText } from 'lucide-react';
 
 export default async function AdminLayout ({ children }: { children: React.ReactNode }) {
   const session = await getAdminServerSession();
@@ -17,6 +17,10 @@ export default async function AdminLayout ({ children }: { children: React.React
   const navItems = [
     { href: '/admin', label: 'Daftar Cafe', icon: Building2 },
     { href: '/admin/users', label: 'Pengguna & Kasir', icon: Users },
+    { href: '/admin/packages', label: 'Master Paket', icon: Package },
+    { href: '/admin/api-keys', label: 'Monitoring API Key', icon: KeyRound },
+    { href: '/admin/transactions', label: 'Riwayat Transaksi', icon: ScrollText },
+    { href: '/admin/rbac', label: 'Matriks Hak Akses', icon: ShieldCheck },
     { href: '/admin/models', label: 'Model & API Key', icon: KeyRound },
   ];
 

@@ -173,6 +173,7 @@ export async function rotateRefreshToken(
     const u = (await tx`
       SELECT id, role, cafe_id FROM users
       WHERE id = ${s[0].user_id} AND role IN ('kasir', 'super_admin')
+        AND COALESCE(is_active, TRUE)
       LIMIT 1`) as unknown as AdminUser[];
     if (!u[0]) return null;
     return u[0];
@@ -199,6 +200,7 @@ export async function loginByPassword(
     SELECT id, role, cafe_id, admin_password_hash FROM users
     WHERE (lower(email) = ${id} OR phone_number = ${emailOrPhone.trim()})
       AND role IN ('kasir', 'super_admin')
+      AND COALESCE(is_active, TRUE)
     LIMIT 1`) as unknown as Array<AdminUser & { admin_password_hash: string | null }>;
   const row = rows[0];
   if (!row || !row.admin_password_hash || !verifyPassword(password, row.admin_password_hash))
@@ -276,7 +278,7 @@ async function authBySessionId(sid: string): Promise<AuthContext | null> {
   const rows = (await sql`
     SELECT u.id, u.name, u.email, u.phone_number, u.avatar_url, u.role
     FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.id = ${sid} LIMIT 1`) as unknown as AuthUser[];
+    WHERE s.id = ${sid} AND COALESCE(u.is_active, TRUE) LIMIT 1`) as unknown as AuthUser[];
   if (!rows[0]) return null;
   await sql`UPDATE sessions SET last_active = now() WHERE id = ${sid}`;
   return { user: rows[0], sessionId: sid };

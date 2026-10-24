@@ -11,6 +11,7 @@ import {
   Settings,
   Trash2,
   VideoIcon,
+  LogOut,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -27,20 +28,15 @@ const navItems = [
   { label: "Developer API", icon: Code2, href: "/dashboard/developer" },
 ];
 
-
 export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const [historyOpen, setHistoryOpen] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  // ponytail: initial state WAJIB sama persis dengan output SSR (mockUser),
-  // bukan hasil localStorage — kalau beda, hydration gagal ("SA" vs "TR").
-  // Nilai asli dipasang di useEffect sync() di bawah, setelah hydrate.
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
-  // ponytail: "Terbaru" = chat_sessions per-user dari DB (PRD 4.5/5.3).
-  // sync() baca cache; hydrateSessions() tarik DB lalu notify -> sync jalan lagi.
   useEffect(() => {
     const sync = () => {
       setSessions(listChatSessions());
@@ -50,7 +46,6 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
     void hydrateSessions();
     fetchProfile().then(setProfile);
     window.addEventListener(CHAT_CHANGED, sync);
-    // job chat selesai -> judul/updated_at berubah di DB, muat ulang
     window.addEventListener(CHAT_JOBS_CHANGED, () => void hydrateSessions());
     window.addEventListener(SETTINGS_CHANGED, sync);
     window.addEventListener("storage", sync);
@@ -61,8 +56,6 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
     };
   }, []);
 
-  // ponytail: Obrolan Baru = pindah ke /dashboard (halaman chat kosong).
-  // Kalau sudah di sana, reset draft via event.
   function newChat() {
     onClose?.();
     if (pathname === "/dashboard") window.dispatchEvent(new Event(CHAT_NEW));
@@ -74,15 +67,21 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
     if (pathname === `/dashboard/chat/${id}`) router.push("/dashboard");
   }
 
+  async function handleLogout() {
+    try {
+      await fetch("/api/v1/auth/me", { method: "DELETE", credentials: "include" });
+    } catch {}
+    setUserMenuOpen(false);
+    window.dispatchEvent(new Event("auth_logout"));
+    router.push("/dashboard");
+  }
+
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-40 flex h-full shrink-0 flex-col overflow-x-hidden border-r border-neutral-200 bg-neutral-50 transition-transform duration-200 ease-in-out dark:border-neutral-800 dark:bg-neutral-900 lg:static lg:z-auto lg:translate-x-0 ${
         open ? "translate-x-0" : "-translate-x-full"
       } ${collapsed ? "w-64 lg:w-16" : "w-64"}`}
     >
-      {/* Satu scroll area untuk seluruh sidebar (logo sampai riwayat chat) —
-          scrollbar-nya jadi satu, menyatu dengan tepi sidebar, bukan kotak
-          scroll kecil terpisah di tengah. */}
       <div className="relative min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           <div
@@ -174,57 +173,71 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
               </button>
 
               {historyOpen && (
-                sessions.length === 0 ? (
-                  <p className="mt-1 px-3 py-2 text-[13px] text-neutral-400 dark:text-neutral-500">
-                    Belum ada obrolan.
-                  </p>
-                ) : (
-                <ul className="mt-1 space-y-0.5">
-                  {sessions.map((s) => {
-                    const active = pathname === `/dashboard/chat/${s.id}`;
-                    return (
-                      <li key={s.id} className="group flex items-center gap-1">
-                        <Link
-                          href={`/dashboard/chat/${s.id}`}
-                          onClick={onClose}
-                          className={`block min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-[13px] transition hover:bg-neutral-200/60 dark:hover:bg-neutral-800 ${
-                            active
-                              ? "bg-neutral-200/60 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-white"
-                              : "text-neutral-700 dark:text-neutral-200"
-                          }`}
-                          title={s.title}
-                        >
-                          {s.title}
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => removeSession(s.id)}
-                          aria-label={`Hapus ${s.title}`}
-                          title="Hapus obrolan"
-                          className="shrink-0 rounded-md p-1.5 text-neutral-400 opacity-0 transition hover:bg-neutral-200/60 hover:text-red-500 group-hover:opacity-100 dark:hover:bg-neutral-800"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-                )
+                <>
+                  {sessions.length === 0 ? (
+                    <p className="mt-1 px-3 py-2 text-[13px] text-neutral-400 dark:text-neutral-500">
+                      Belum ada obrolan.
+                    </p>
+                  ) : (
+                    <ul className="mt-1 space-y-0.5">
+                      {sessions.map((s) => {
+                        const active = pathname === `/dashboard/chat/${s.id}`;
+                        return (
+                          <li key={s.id} className="group flex items-center gap-1">
+                            <Link
+                              href={`/dashboard/chat/${s.id}`}
+                              onClick={onClose}
+                              className={`block min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-[13px] transition hover:bg-neutral-200/60 dark:hover:bg-neutral-800 ${
+                                active
+                                  ? "bg-neutral-200/60 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-white"
+                                  : "text-neutral-700 dark:text-neutral-200"
+                              }`}
+                              title={s.title}
+                            >
+                              {s.title}
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => removeSession(s.id)}
+                              aria-label={`Hapus ${s.title}`}
+                              title="Hapus obrolan"
+                              className="shrink-0 rounded-md p-1.5 text-neutral-400 opacity-0 transition hover:bg-neutral-200/60 hover:text-red-500 group-hover:opacity-100 dark:hover:bg-neutral-800"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </>
               )}
             </div>
           )}
         </div>
 
-        {/* Fade tetap di posisinya (tidak ikut scroll) tepat di perbatasan
-            dengan footer "Pengaturan" — item yang lewat di baliknya menghilang
-            secara gradient, bukan terpotong tegas. */}
         {!collapsed && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-b from-transparent to-neutral-50 dark:to-neutral-900" />
         )}
       </div>
 
-      {/* Footer fixed: Pengaturan + profil, selalu terlihat, di luar area scroll. */}
-      <div className="px-4 py-3">
+      <div className="relative px-4 py-3">
+        {userMenuOpen && (
+          <div className="absolute bottom-16 left-4 right-4 z-50 rounded-xl border border-neutral-200 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
+            <div className="px-2 py-1.5 border-b border-neutral-100 dark:border-neutral-700/60 mb-1">
+              <p className="text-xs font-semibold text-neutral-900 dark:text-neutral-50 truncate">{profile.name}</p>
+              <p className="text-[11px] text-neutral-400 truncate">{profile.contact}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:text-red-400 transition"
+            >
+              <LogOut size={14} />
+              <span>Keluar / Ganti Key</span>
+            </button>
+          </div>
+        )}
         <Link
           href="/dashboard/settings"
           title={collapsed ? "Pengaturan" : undefined}
@@ -240,6 +253,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
 
         <button
           type="button"
+          onClick={() => setUserMenuOpen((prev) => !prev)}
           title={collapsed ? profile.name : undefined}
           className={`flex w-full items-center rounded-lg border border-neutral-200 py-1.5 text-left transition hover:bg-neutral-100 dark:border-neutral-800 dark:hover:bg-neutral-800 ${
             collapsed ? "justify-center px-0" : "gap-2.5 px-3"

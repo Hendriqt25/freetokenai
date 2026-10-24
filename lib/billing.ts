@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { sql } from "./db";
 import { logReq, newRequestId } from "./obs";
-import { devSeedUserId, requireAuth } from "./auth";
+import { requireAuth } from "./auth";
 
 // ponytail: ledger dua arah (PRD §5.2) — burn saat deduct, refund saat refund,
 // masing-masing SATU transaksi sql.begin dengan UPDATE workspaces-nya.
@@ -178,15 +178,7 @@ export async function workspaceIdForRequest(req: Request): Promise<string | null
       ORDER BY created_at LIMIT 1`) as unknown as { id: string }[];
     if (rows[0]) return rows[0].id;
   }
-  // ponytail: seed fallback hanya non-production; production anon = null dan
-  // caller WAJIB 401 tanpa panggil provider (/api/chat, /api/images/generate, /api/videos/generate).
-  if (process.env.NODE_ENV === "production") return null;
-  const seedUser = await devSeedUserId();
-  if (!seedUser) return null;
-  const rows = (await sql`
-    SELECT id FROM workspaces WHERE user_id = ${seedUser}
-    ORDER BY created_at LIMIT 1`) as unknown as { id: string }[];
-  return rows[0]?.id ?? null;
+  return null;
 }
 
 // ponytail: streaming metered-deduct (PRD §4.3) — pre-check min 5 token,

@@ -94,7 +94,7 @@ export async function fetchWorkspace(): Promise<WorkspaceInfo> {
   const data = await api<{ workspace: { token_balance: number; expires_at: string } }>(
     "/api/v1/workspace",
   );
-  if (!data) return { tokenBalance: 1500, expiresAt: "", expiresAtLabel: "" };
+  if (!data) return { tokenBalance: 0, expiresAt: "", expiresAtLabel: "" };
   const d = new Date(data.workspace.expires_at);
   return {
     tokenBalance: data.workspace.token_balance,
