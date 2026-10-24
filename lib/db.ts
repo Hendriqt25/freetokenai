@@ -7,7 +7,12 @@ const globalForDb = globalThis as unknown as { sql?: ReturnType<typeof postgres>
 const sql =
   globalForDb.sql ??
   postgres(process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5433/resto_ai_dev", {
-    max: 10,
+    // Vercel/serverless: 1 koneksi per instance, dan Neon pooler (PgBouncer
+    // transaction mode) tidak mendukung prepared statement bernama.
+    // Di host long-running (VPS) boleh balik ke max: 10 tanpa prepare:false.
+    max: 1,
+    prepare: false,
+    idle_timeout: 20,
   });
 
 if (process.env.NODE_ENV !== "production") globalForDb.sql = sql;

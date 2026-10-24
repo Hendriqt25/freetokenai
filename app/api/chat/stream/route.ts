@@ -21,6 +21,9 @@ import {
   workspaceIdForRequest,
 } from "@/lib/billing";
 
+// Vercel default 10 detik -> jawaban panjang kepotong. 60 = batas Hobby.
+export const maxDuration = 60;
+
 const GEMINI_DEFAULT = process.env.GEMINI_MODEL ?? DEFAULT_CHAT_MODEL;
 const SYSTEM_ID =
   "Jawab dalam Bahasa Indonesia yang ringkas dan membantu. " +

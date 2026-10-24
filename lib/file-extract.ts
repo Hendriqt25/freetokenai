@@ -2,8 +2,10 @@ import mammoth from "mammoth";
 import { extractText as extractPdfText, getDocumentProxy } from "unpdf";
 
 // Server-only: ekstraksi file upload. Jangan import modul ini dari client.
-export const MAX_FILE_BYTES = 10 * 1024 * 1024;
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+// Vercel Functions membatasi body request 4.5 MB -> jaga total di bawah itu.
+export const MAX_FILE_BYTES = 4 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
 export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
 export const MAX_EXTRACTED_CHARS = 200_000;
 

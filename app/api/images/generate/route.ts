@@ -12,6 +12,9 @@ import {
   workspaceIdForRequest,
 } from "@/lib/billing";
 
+// Vercel: generate bisa lewat 10 detik default.
+export const maxDuration = 60;
+
 const IMAGE_MODELS = ["nano-banana-2", "nano-banana-pro", "qwen-image"];
 
 export async function POST(req: Request) {

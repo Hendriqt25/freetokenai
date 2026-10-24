@@ -42,8 +42,9 @@ type UploadResponse = {
 };
 
 const MAX_FILES = 5;
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
+// Vercel Functions: body request maks 4.5 MB -> samakan batas UI dengan server.
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const ACCEPT_FILES =
   ".pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,.htm,.xml,.log,.yml,.yaml,image/png,image/jpeg,image/webp";
 

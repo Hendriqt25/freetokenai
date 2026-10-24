@@ -13,6 +13,9 @@ import {
   workspaceIdForRequest,
 } from "@/lib/billing";
 
+// Vercel: upload referensi + submit job bisa lewat 10 detik default.
+export const maxDuration = 60;
+
 const VIDEO_MODELS = ["veo-3.1-lite", "veo-3.1-fast", "veo-3.1-quality"];
 
 export async function POST(req: Request) {

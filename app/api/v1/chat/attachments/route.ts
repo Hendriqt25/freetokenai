@@ -5,7 +5,7 @@ import {
   extractUploadedFile,
   FileExtractError,
   MAX_ATTACHMENTS_PER_MESSAGE,
-  MAX_FILE_BYTES,
+  MAX_TOTAL_BYTES,
   type ExtractedUpload,
 } from "@/lib/file-extract";
 
@@ -64,9 +64,14 @@ export async function POST(req: Request) {
     );
 
   const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-  if (totalSize > MAX_FILE_BYTES * 2)
+  if (totalSize > MAX_TOTAL_BYTES)
     return NextResponse.json(
-      { error: { code: "TOTAL_TOO_LARGE", message: "Total ukuran file terlalu besar (maks 20 MB)." } },
+      {
+        error: {
+          code: "TOTAL_TOO_LARGE",
+          message: `Total ukuran file terlalu besar (maks ${MAX_TOTAL_BYTES / 1024 / 1024} MB).`,
+        },
+      },
       { status: 413 },
     );
 
