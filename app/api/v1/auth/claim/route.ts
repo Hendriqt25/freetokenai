@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSession, sessionCookieHeader } from "@/lib/auth";
+import { createSession, requireAuth, sessionCookieHeader } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { rateLimited, retryAfterSec } from "@/lib/rate-limit";
 
@@ -64,15 +64,23 @@ export async function POST(req: Request) {
       { error: { code: "CODE_REQUIRED", message: "Kode struk wajib." } },
       { status: 400 },
     );
-  const idn = typeof body.identifier === "string" ? parseIdentifier(body.identifier) : null;
-  if (!idn)
+
+  // ponytail: kalau sudah login, token struk masuk ke workspace user yang sedang
+  // login. Identifier diabaikan supaya tidak membuat user/sesi baru (ganti akun).
+  const auth = await requireAuth(req);
+  const idn = auth
+    ? null
+    : typeof body.identifier === "string"
+      ? parseIdentifier(body.identifier)
+      : null;
+  if (!auth && !idn)
     return NextResponse.json(
       { error: { code: "INVALID_IDENTIFIER", message: "Masukkan No. WhatsApp atau email yang valid." } },
       { status: 400 },
     );
 
   // ponytail: rate-limit identifier 5/jam (setelah validasi identifier).
-  const identKey = idn.email ?? `phone:${idn.phone}`;
+  const identKey = auth ? `user:${auth.user.id}` : idn!.email ?? `phone:${idn!.phone}`;
   if (await rateLimited(`claim:id:${identKey}`, 5, 3600)) {
     return NextResponse.json(
       { error: { code: "RATE_LIMITED", message: "Terlalu banyak klaim untuk identifier ini." } },
@@ -102,27 +110,35 @@ export async function POST(req: Request) {
       if (rc[0].is_claimed)
         throw new ClaimError("RECEIPT_ALREADY_CLAIMED", 409, "Kode struk sudah pernah diklaim.");
 
-      // find-or-create user (unique: email / phone_number)
-      const where = idn.email
-        ? tx`SELECT id FROM users WHERE email = ${idn.email} LIMIT 1`
-        : tx`SELECT id FROM users WHERE phone_number = ${idn.phone} LIMIT 1`;
-      let user = (await where) as unknown as { id: string }[];
-      if (!user[0]) {
-        const ins = (await tx`
-          INSERT INTO users (email, phone_number)
-          VALUES (${idn.email}, ${idn.phone})
-          ON CONFLICT DO NOTHING
-          RETURNING id`) as unknown as { id: string }[];
-        if (ins[0]) user = ins;
-        else
-          user = (await (idn.email
-            ? tx`SELECT id FROM users WHERE email = ${idn.email} LIMIT 1`
-            : tx`SELECT id FROM users WHERE phone_number = ${idn.phone} LIMIT 1`)) as unknown as {
-            id: string;
-          }[];
+      let uid: string;
+      if (auth) {
+        // Sudah login: kredit workspace milik user ini, tanpa bikin akun/sesi baru.
+        uid = auth.user.id;
+        await tx`SELECT id FROM users WHERE id = ${uid} FOR UPDATE`;
+      } else {
+        // find-or-create user (unique: email / phone_number)
+        const identity = idn!;
+        const where = identity.email
+          ? tx`SELECT id FROM users WHERE email = ${identity.email} LIMIT 1`
+          : tx`SELECT id FROM users WHERE phone_number = ${identity.phone} LIMIT 1`;
+        let user = (await where) as unknown as { id: string }[];
+        if (!user[0]) {
+          const ins = (await tx`
+            INSERT INTO users (email, phone_number)
+            VALUES (${identity.email}, ${identity.phone})
+            ON CONFLICT DO NOTHING
+            RETURNING id`) as unknown as { id: string }[];
+          if (ins[0]) user = ins;
+          else
+            user = (await (identity.email
+              ? tx`SELECT id FROM users WHERE email = ${identity.email} LIMIT 1`
+              : tx`SELECT id FROM users WHERE phone_number = ${identity.phone} LIMIT 1`)) as unknown as {
+              id: string;
+            }[];
+        }
+        uid = user[0].id;
+        await tx`SELECT id FROM users WHERE id = ${uid} FOR UPDATE`;
       }
-      const uid = user[0].id;
-      await tx`SELECT id FROM users WHERE id = ${uid} FOR UPDATE`;
 
       // find-or-create workspace (serial per-user lewat lock users di atas)
       let ws = (await tx`
@@ -162,6 +178,14 @@ export async function POST(req: Request) {
     if (e instanceof ClaimError)
       return NextResponse.json({ error: { code: e.code, message: e.message } }, { status: e.status });
     throw e;
+  }
+
+  // Klaim oleh user yang sudah login: jangan ganti sesi/cookie.
+  if (auth) {
+    return NextResponse.json({
+      logged_in: true,
+      workspace: { token_balance: workspace.token_balance, expires_at: workspace.expires_at },
+    });
   }
 
   // sesi dibuat setelah commit; device ke-3 auto-revoke oldest (lib/auth.ts)

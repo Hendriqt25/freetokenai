@@ -40,17 +40,35 @@ const id = {
   // auth modal
   "auth.welcome": "Selamat Datang di FreeTokenAI",
   "auth.desc":
-    "Silakan masukkan API Key dari kasir cafe (tercantum pada struk belanja Anda) untuk mengakses AI Chat, Gambar, dan Video.",
+    "Untuk memakai AI, dapatkan API Key dari kasir cafe.",
   "auth.yourKey": "API Key Anda",
   "auth.validate": "Validasi & Masuk ke Dashboard",
   "auth.validating": "Memvalidasi Kunci...",
   "auth.needKey":
-    "Belum punya kunci? Pesan kopi / makanan di kasir dan minta struk API Key AI.",
+    "Belum punya kunci? Pesan di kasir cafe untuk mendapatkan struk API Key.",
   "auth.staff": "Pegawai cafe?",
   "auth.staffLogin": "Login Kasir POS",
   "auth.empty": "Masukkan API key terlebih dahulu.",
   "auth.failed": "Validasi API key gagal.",
   "auth.error": "Terjadi kesalahan.",
+
+  // token habis
+  "tokens.title": "Saldo Token Habis",
+  "tokens.desc": "Pilih salah satu cara di bawah untuk lanjut memakai AI.",
+  "tokens.balance": "Sisa Token",
+  "tokens.claimTitle": "Punya kode struk?",
+  "tokens.claimDesc": "Masukkan kode struk dari kasir cafe.",
+  "tokens.claimBtn": "Klaim Token",
+  "tokens.claiming": "Mengklaim...",
+  "tokens.claimSuccess": "Token berhasil ditambahkan ke akun ini. Kamu bisa lanjut memakai AI.",
+  "tokens.claimFailed": "Gagal klaim token.",
+  "tokens.adminTitle": "Minta admin tambah saldo",
+  "tokens.adminDesc":
+    "Minta admin menambah saldo untuk akun ini. Saldo diperbarui otomatis tanpa perlu logout.",
+  "tokens.check": "Cek Saldo",
+  "tokens.checking": "Memeriksa...",
+  "tokens.adminSuccess": "Saldo sudah bertambah. Kamu bisa lanjut memakai AI.",
+  "tokens.continue": "Lanjut Pakai AI",
 
   // settings
   "settings.title": "Pengaturan",
@@ -339,6 +357,8 @@ const id = {
   "claim.processing": "Memproses…",
   "claim.note":
     "Satu kode struk hanya bisa diklaim satu kali. Token berlaku 7 hari sejak klaim.",
+  "claim.signedInNote": "Token akan langsung masuk ke akun yang sedang login.",
+  "claim.signedInSuccess": "Token masuk ke akunmu. Kamu tidak perlu login ulang.",
   "claim.httpFailed": "Klaim gagal (HTTP {status}).",
   "claim.network":
     "Tidak dapat menghubungi server. Periksa koneksi lalu coba lagi.",
@@ -371,17 +391,34 @@ const en: Record<keyof typeof id, string> = {
 
   "auth.welcome": "Welcome to FreeTokenAI",
   "auth.desc":
-    "Enter the API Key from the cafe cashier (printed on your receipt) to access AI Chat, Image, and Video.",
+    "To use AI, get an API Key from the cafe cashier.",
   "auth.yourKey": "Your API Key",
   "auth.validate": "Validate & Enter Dashboard",
   "auth.validating": "Validating key...",
   "auth.needKey":
-    "No key yet? Order at the cashier and ask for an AI API key receipt.",
+    "No key yet? Order at the cafe cashier to get an API Key receipt.",
   "auth.staff": "Cafe staff?",
   "auth.staffLogin": "Cashier POS Login",
   "auth.empty": "Enter an API key first.",
   "auth.failed": "API key validation failed.",
   "auth.error": "Something went wrong.",
+
+  "tokens.title": "Token Balance Empty",
+  "tokens.desc": "Choose one of the options below to keep using AI.",
+  "tokens.balance": "Remaining Tokens",
+  "tokens.claimTitle": "Have a receipt code?",
+  "tokens.claimDesc": "Enter the receipt code from the cafe cashier.",
+  "tokens.claimBtn": "Claim Tokens",
+  "tokens.claiming": "Claiming...",
+  "tokens.claimSuccess": "Tokens were added to this account. You can keep using AI.",
+  "tokens.claimFailed": "Failed to claim tokens.",
+  "tokens.adminTitle": "Ask admin to add balance",
+  "tokens.adminDesc":
+    "Ask the admin to add balance to this account. It updates automatically without logging out.",
+  "tokens.check": "Check Balance",
+  "tokens.checking": "Checking...",
+  "tokens.adminSuccess": "Balance has been added. You can keep using AI.",
+  "tokens.continue": "Continue Using AI",
 
   "settings.title": "Settings",
   "settings.subtitle": "Your profile, devices, workspace, and preferences.",
@@ -659,6 +696,8 @@ const en: Record<keyof typeof id, string> = {
   "claim.processing": "Processing…",
   "claim.note":
     "Each receipt code can only be claimed once. Tokens are valid for 7 days from claiming.",
+  "claim.signedInNote": "Tokens will go directly to the account you are signed in with.",
+  "claim.signedInSuccess": "Tokens were added to your account. No need to sign in again.",
   "claim.httpFailed": "Claim failed (HTTP {status}).",
   "claim.network": "Cannot reach the server. Check your connection and try again.",
 };

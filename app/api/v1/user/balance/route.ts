@@ -16,7 +16,8 @@ export async function GET(req: Request) {
       SELECT id, token_balance, expires_at, cafe_id
       FROM workspaces
       WHERE user_id = ${auth.user.id}
-      LIMIT 1`) as unknown as Array<{
+      ORDER BY created_at
+    LIMIT 1`) as unknown as Array<{
       id: string;
       token_balance: number;
       expires_at: string | null;

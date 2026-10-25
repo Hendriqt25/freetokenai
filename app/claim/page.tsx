@@ -11,6 +11,7 @@ type ClaimResult = { token_balance: number; expires_at: string };export default 
     new Intl.DateTimeFormat(locale, { dateStyle: "long", timeStyle: "short" }).format(new Date(s));
   const [code, setCode] = useState("");
   const [identifier, setIdentifier] = useState("");
+  const [signedIn, setSignedIn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ClaimResult | null>(null);
@@ -18,6 +19,18 @@ type ClaimResult = { token_balance: number; expires_at: string };export default 
   useEffect(() => {
     const c = new URLSearchParams(window.location.search).get("code");
     if (c) setCode(c.trim().toUpperCase());
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/v1/auth/me", { credentials: "include", cache: "no-store" })
+      .then((res) => {
+        if (alive && res.ok) setSignedIn(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -29,7 +42,11 @@ type ClaimResult = { token_balance: number; expires_at: string };export default 
       const res = await fetch("/api/v1/auth/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code.trim(), identifier: identifier.trim() }),
+        credentials: "include",
+        body: JSON.stringify({
+          code: code.trim(),
+          ...(signedIn ? {} : { identifier: identifier.trim() }),
+        }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -75,7 +92,7 @@ type ClaimResult = { token_balance: number; expires_at: string };export default 
                 {t("claim.openDashboard")}
               </a>
               <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
-                {t("claim.autoLogin")}
+                {signedIn ? t("claim.signedInSuccess") : t("claim.autoLogin")}
               </p>
             </div>
           ) : (
@@ -85,7 +102,7 @@ type ClaimResult = { token_balance: number; expires_at: string };export default 
                 <div>
                   <h1 className="text-xl font-bold text-neutral-900 dark:text-white">{t("claim.title")}</h1>
                   <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                    {t("claim.subtitle")}
+                    {signedIn ? t("tokens.claimDesc") : t("claim.subtitle")}
                   </p>
                 </div>
               </div>
@@ -106,25 +123,32 @@ type ClaimResult = { token_balance: number; expires_at: string };export default 
                     required
                     className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-mono text-sm uppercase tracking-wider text-neutral-900 outline-none transition focus:border-primary dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
                   />
+                  {signedIn && (
+                    <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                      {t("claim.signedInNote")}
+                    </p>
+                  )}
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="identifier"
-                    className="mb-1 block text-sm font-medium text-neutral-700 dark:text-neutral-300"
-                  >
-                    {t("claim.identifier")}
-                  </label>
-                  <input
-                    id="identifier"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder={t("claim.identifierPlaceholder")}
-                    autoComplete="email"
-                    required
-                    className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-primary dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
-                  />
-                </div>
+                {!signedIn && (
+                  <div>
+                    <label
+                      htmlFor="identifier"
+                      className="mb-1 block text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      {t("claim.identifier")}
+                    </label>
+                    <input
+                      id="identifier"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      placeholder={t("claim.identifierPlaceholder")}
+                      autoComplete="email"
+                      required
+                      className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-primary dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
+                    />
+                  </div>
+                )}
 
                 {error && (
                   <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
@@ -134,7 +158,7 @@ type ClaimResult = { token_balance: number; expires_at: string };export default 
 
                 <button
                   type="submit"
-                  disabled={busy || !code.trim() || !identifier.trim()}
+                  disabled={busy || !code.trim() || (!signedIn && !identifier.trim())}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {busy && <Loader2 className="animate-spin" size={16} />}

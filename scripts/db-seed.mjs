@@ -9,7 +9,6 @@ import { randomBytes, scryptSync } from "node:crypto";
 import postgres from "postgres";
 
 // ponytail: SALINAN hardening admin-auth (lib) — seed CLI berdiri sendiri, tak bisa import TS.
-const PEPPER = process.env.ADMIN_PASSWORD_PEPPER ?? "dev-only-pepper-TASK023";
 function adminHash(password) {
   const salt = randomBytes(16);
   const key = scryptSync(password + PEPPER, salt, 64, { N: 16384, r: 8, p: 1 });
@@ -34,6 +33,7 @@ function loadEnv() {
 }
 
 loadEnv();
+const PEPPER = process.env.ADMIN_PASSWORD_PEPPER ?? "dev-only-pepper-TASK023";
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.error("DATABASE_URL belum di-set (lihat .env.example).");
@@ -87,7 +87,7 @@ try {
     const id = await upsertUser(a);
     await sql`
       UPDATE users SET admin_password_hash = ${adminHash(a.pass)}
-      WHERE id = ${id} AND admin_password_hash IS NULL`;
+      WHERE id = ${id}`;
   }
 
   // Paket token default (global, cafe_id NULL) — pilihan nominal kasir saat generate struk.

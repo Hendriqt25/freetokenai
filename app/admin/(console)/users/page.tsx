@@ -16,6 +16,7 @@ import {
   UserCheck,
   ShieldCheck,
   Power,
+  Wallet,
 } from 'lucide-react';
 import { Alert, PageHeader } from '@/components/admin/ui';
 
@@ -33,12 +34,14 @@ type UserItem = {
   max_active_keys: number;
   daily_issue_limit: number;
   keys_issued_today: number;
+  token_balance: number | null;
   can_issue_api_keys: boolean;
 };
 
 type Cafe = {
   id: string;
   name: string;
+  token_balance?: number;
 };
 
 export default function AdminUsersPage() {
@@ -78,6 +81,14 @@ export default function AdminUsersPage() {
   // Input manual cafe baru saat menambah kasir
   const [cafeMode, setCafeMode] = useState<'select' | 'manual'>('select');
   const [manualCafeName, setManualCafeName] = useState('');
+  const [initialBalance, setInitialBalance] = useState('');
+  const [initialBalanceNote, setInitialBalanceNote] = useState('');
+
+  // Form fields for Edit / Reset Password
+  // Modal saldo token workspace customer
+  const [workspaceBalanceUser, setWorkspaceBalanceUser] = useState<UserItem | null>(null);
+  const [workspaceBalanceSubmitting, setWorkspaceBalanceSubmitting] = useState(false);
+  const [workspaceBalanceForm, setWorkspaceBalanceForm] = useState({ amount: '', note: '' });
 
   // Form fields for Edit / Reset Password
   const [editFormData, setEditFormData] = useState({
@@ -165,6 +176,24 @@ export default function AdminUsersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message ?? 'Gagal membuat pengguna');
 
+      // Top-up saldo cafe jika diisi admin (berlaku cafe baru & existing).
+      if (formData.role === 'kasir' && Number(initialBalance) > 0 && cafeId) {
+        try {
+          await fetch(`/api/v1/admin/cafes/${cafeId}/balance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              mode: 'topup',
+              amount: Number(initialBalance),
+              note: initialBalanceNote.trim() || undefined,
+            }),
+          });
+        } catch {
+          // Jangan gagalkan pembuatan akun.
+        }
+      }
+
       showNotice(
         cafeMode === 'manual' && formData.role === 'kasir'
           ? `Cafe "${manualCafeName.trim()}" dan akun ${data.user.name || data.user.email} berhasil dibuat.`
@@ -181,6 +210,8 @@ export default function AdminUsersPage() {
       });
       setCafeMode('select');
       setManualCafeName('');
+      setInitialBalance('');
+      setInitialBalanceNote('');
       loadData();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal menyimpan data');
@@ -317,6 +348,44 @@ export default function AdminUsersPage() {
       setError(e instanceof Error ? e.message : 'Gagal menyimpan akses');
     } finally {
       setAccessSubmitting(false);
+    }
+  }
+
+  function openWorkspaceBalanceModal(u: UserItem) {
+    setWorkspaceBalanceUser(u);
+    setWorkspaceBalanceForm({ amount: '', note: '' });
+  }
+
+  async function handleSaveWorkspaceBalance(e: React.FormEvent) {
+    e.preventDefault();
+    if (!workspaceBalanceUser) return;
+    setWorkspaceBalanceSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/v1/admin/users/${workspaceBalanceUser.id}/workspace-balance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          amount: Number(workspaceBalanceForm.amount),
+          note: workspaceBalanceForm.note,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message ?? 'Gagal menambah saldo');
+      setUsers((prev) =>
+        prev.map((x) =>
+          x.id === workspaceBalanceUser.id ? { ...x, token_balance: data.token_balance } : x,
+        ),
+      );
+      showNotice(
+        `Saldo token ${workspaceBalanceUser.name || workspaceBalanceUser.email} sekarang ${data.token_balance} Token.`,
+      );
+      setWorkspaceBalanceUser(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal menambah saldo');
+    } finally {
+      setWorkspaceBalanceSubmitting(false);
     }
   }
 
@@ -512,6 +581,15 @@ export default function AdminUsersPage() {
                             <ShieldCheck size={16} />
                           </button>
                         )}
+                        {u.role === 'customer' && (
+                          <button
+                            onClick={() => openWorkspaceBalanceModal(u)}
+                            title={`Saldo Token: ${u.token_balance ?? 0}`}
+                            className="p-1.5 rounded-lg text-neutral-500 hover:text-primary hover:bg-neutral-100 dark:hover:bg-neutral-700 transition"
+                          >
+                            <Wallet size={16} />
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setEditingUser(u);
@@ -583,7 +661,7 @@ export default function AdminUsersPage() {
                 <div>
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                      Cafe Cabang <span className="text-red-500">*</span>
+                      Nama Cafe / Toko <span className="text-red-500">*</span>
                     </label>
                     <div className="flex items-center gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-900 p-0.5">
                       {(
@@ -626,7 +704,7 @@ export default function AdminUsersPage() {
                     <>
                       <input
                         type="text"
-                        placeholder="cth. Kopi Senja Cabang Dago"
+                        placeholder="cth. Kopi Senja"
                         maxLength={150}
                         value={manualCafeName}
                         onChange={(e) => setManualCafeName(e.target.value)}
@@ -634,12 +712,66 @@ export default function AdminUsersPage() {
                         className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary"
                       />
                       <p className="mt-1 text-[11px] text-neutral-400">
-                        Cafe baru dibuat otomatis (slug dari nama) lalu kasir langsung terhubung ke sana.
+                        Cafe baru akan dibuat otomatis dan kasir langsung terhubung ke sana.
                       </p>
                     </>
                   )}
+                <div className="mt-3 rounded-lg border border-neutral-200 dark:border-neutral-700 p-3 space-y-3">
+                  <p className="text-xs text-neutral-600 dark:text-neutral-300">
+                    Saldo sekarang:{' '}
+                    <strong>
+                      {(cafeMode === 'manual'
+                        ? 0
+                        : cafes.find((c) => c.id === formData.cafe_id)?.token_balance ?? 0
+                      ).toLocaleString('id-ID')}
+                    </strong>{' '}
+                    token
+                    {Number(initialBalance) > 0 && (
+                      <>
+                        {' '}→{' '}
+                        <strong>
+                          {(
+                            (cafeMode === 'manual'
+                              ? 0
+                              : cafes.find((c) => c.id === formData.cafe_id)?.token_balance ?? 0) +
+                            Number(initialBalance)
+                          ).toLocaleString('id-ID')}
+                        </strong>
+                      </>
+                    )}
+                  </p>
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Jumlah top-up
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={initialBalance}
+                      onChange={(e) =>
+                        setInitialBalance(e.target.value.replace(/\D/g, '').slice(0, 6))
+                      }
+                      placeholder="0"
+                      className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary"
+                    />
+                    <p className="mt-1 text-[11px] text-neutral-400">Ketik angka 1–100.000.</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Catatan (opsional)
+                    </label>
+                    <input
+                      type="text"
+                      value={initialBalanceNote}
+                      onChange={(e) => setInitialBalanceNote(e.target.value)}
+                      placeholder="Contoh: transfer bank BCA"
+                      className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
                 </div>
               )}
+
 
               <div>
                 <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
@@ -951,6 +1083,92 @@ export default function AdminUsersPage() {
                 >
                   {accessSubmitting && <Loader2 size={16} className="animate-spin" />}
                   Simpan Akses
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SALDO TOKEN CUSTOMER */}
+      {workspaceBalanceUser && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-neutral-800 rounded-2xl max-w-md w-full border border-neutral-200 dark:border-neutral-700 shadow-xl overflow-hidden">
+            <div className="p-5 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
+              <h2 className="font-bold text-neutral-900 dark:text-white flex items-center gap-2">
+                <Wallet size={18} className="text-primary" />
+                Top-Up Saldo Token
+              </h2>
+              <button
+                onClick={() => setWorkspaceBalanceUser(null)}
+                className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveWorkspaceBalance} className="p-5 space-y-4 text-sm">
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                Pengguna:{' '}
+                <strong className="text-neutral-900 dark:text-white">
+                  {workspaceBalanceUser.name || workspaceBalanceUser.email}
+                </strong>
+                {' · '}Saldo saat ini:{' '}
+                <strong className="text-neutral-900 dark:text-white">
+                  {workspaceBalanceUser.token_balance ?? 0}
+                </strong>{' '}
+                Token
+              </p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                Saldo masuk langsung ke akun yang sedang dipakai pengguna. Mereka tidak perlu logout.
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                  Jumlah Top-Up <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={workspaceBalanceForm.amount}
+                  onChange={(e) =>
+                    setWorkspaceBalanceForm((f) => ({ ...f, amount: e.target.value.replace(/\D/g, '').slice(0, 6) }))
+                  }
+                  placeholder="0"
+                  required
+                  className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary"
+                />
+                <p className="mt-1 text-[11px] text-neutral-400">Ketik angka 1–100.000.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                  Catatan (opsional)
+                </label>
+                <input
+                  type="text"
+                  value={workspaceBalanceForm.note}
+                  onChange={(e) => setWorkspaceBalanceForm((f) => ({ ...f, note: e.target.value }))}
+                  placeholder="Opsional"
+                  className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-neutral-900 dark:text-white outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-neutral-200 dark:border-neutral-700">
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceBalanceUser(null)}
+                  className="px-4 py-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={workspaceBalanceSubmitting}
+                  className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 transition flex items-center gap-2"
+                >
+                  {workspaceBalanceSubmitting && <Loader2 size={16} className="animate-spin" />}
+                  Tambah Saldo
                 </button>
               </div>
             </form>

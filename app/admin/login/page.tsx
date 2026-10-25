@@ -90,12 +90,6 @@ export default function AdminLoginPage() {
             </button>
           </form>
         </div>
-        <p className="mt-4 text-center text-sm text-neutral-500">
-          Login kasir cafe?{' '}
-          <Link href="/kasir" className="font-medium text-primary hover:underline">
-            Masuk di Kasir POS
-          </Link>
-        </p>
         <p className="mt-2 text-center text-sm text-neutral-500">
           <Link href="/dashboard" className="hover:underline">
             ← Kembali ke Dashboard

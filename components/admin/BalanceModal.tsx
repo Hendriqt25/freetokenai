@@ -103,9 +103,19 @@ export default function BalanceModal({
             {mode === 'topup' ? 'Jumlah top-up' : 'Koreksi (+/-)'}
           </span>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (mode === 'topup') {
+                setAmount(raw.replace(/\D/g, '').slice(0, 6));
+              } else {
+                const neg = raw.trim().startsWith('-');
+                const digits = raw.replace(/\D/g, '').slice(0, 6);
+                setAmount((neg ? '-' : '') + digits);
+              }
+            }}
             placeholder={mode === 'topup' ? '50000' : '-2500'}
             className={inputCls}
             required

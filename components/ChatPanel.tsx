@@ -16,6 +16,7 @@ import {
 } from "@/lib/chat-history";
 import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
 import { useT, type TKey } from "@/lib/i18n";
+import { notifyTokensExhausted } from "@/lib/token-events";
 import {
   fetchWorkspace,
   getAppSettings,
@@ -245,7 +246,10 @@ function useStreamingChat() {
         });
 
         if (!res.ok) {
-          const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+          const data = (await res.json().catch(() => ({}))) as {
+            error?: { code?: string; message?: string };
+          };
+          if (data?.error?.code === "INSUFFICIENT_TOKENS") notifyTokensExhausted();
           throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
         }
 
@@ -270,7 +274,7 @@ function useStreamingChat() {
             let parsed: {
               text?: string;
               done?: boolean;
-              error?: { message?: string };
+              error?: { code?: string; message?: string };
               sessionId?: string;
               finishReason?: string;
             };
@@ -280,7 +284,10 @@ function useStreamingChat() {
               continue;
             }
 
-            if (parsed.error) throw new Error(parsed.error.message ?? "Streaming error");
+            if (parsed.error) {
+              if (parsed.error.code === "INSUFFICIENT_TOKENS") notifyTokensExhausted();
+              throw new Error(parsed.error.message ?? "Streaming error");
+            }
             if (parsed.text) pushChunk(parsed.text);
             if (parsed.done) {
               flushNow();

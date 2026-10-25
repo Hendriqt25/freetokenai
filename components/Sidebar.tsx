@@ -85,7 +85,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
       } ${collapsed ? "w-64 lg:w-16" : "w-64"}`}
     >
       <div className="relative min-h-0 flex-1">
-        <div className="h-full overflow-y-auto">
+        <div className="h-full overflow-y-auto overscroll-contain">
           <div
             className={`flex items-center justify-center gap-2 px-4 ${
               collapsed ? "pt-6 pb-2" : "py-6"

@@ -191,11 +191,7 @@ export default function KasirShell({ children }: { children: React.ReactNode }) 
             <div>
               <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Login Kasir</h1>
               <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                Gunakan akun kasir yang terhubung ke cafe. Superadmin masuk lewat{" "}
-                <a href="/admin/login" className="font-medium text-primary hover:underline">
-                  konsol admin
-                </a>
-                .
+                Gunakan akun kasir yang terhubung ke cafe.
               </p>
             </div>
             {error && (

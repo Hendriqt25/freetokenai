@@ -36,6 +36,8 @@ export async function GET(req: Request) {
         u.max_active_keys,
         u.daily_issue_limit,
         u.keys_issued_today,
+        (SELECT w.token_balance FROM workspaces w
+          WHERE w.user_id = u.id ORDER BY w.created_at LIMIT 1) AS token_balance,
         COALESCE(
           (SELECT up.allowed FROM user_permissions up
             WHERE up.user_id = u.id AND up.permission_key = 'apikey.issue'),
@@ -69,6 +71,7 @@ export async function GET(req: Request) {
       max_active_keys: number;
       daily_issue_limit: number;
       keys_issued_today: number;
+      token_balance: number | null;
       can_issue_api_keys: boolean;
       has_password: boolean;
     }>;
